@@ -377,6 +377,7 @@ body {
   transform: translateY(-50%);
   color: var(--text-tertiary);
   pointer-events: none;
+  z-index: 1;
 }
 
 /* 狀態指示器 */

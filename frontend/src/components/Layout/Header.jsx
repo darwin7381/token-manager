@@ -47,7 +47,7 @@ export default function Header() {
         <div className="search-box">
           <Search className="search-icon" size={18} />
           <input
-            type="text"
+            type="search"
             className="search-input"
             placeholder="搜尋 Token 或路由..."
           />
