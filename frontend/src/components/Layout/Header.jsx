@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Search, Bell, Sun, Moon, User, Settings, LogOut, FileText, ChevronDown } from 'lucide-react';
+import { useUser, useClerk } from '@clerk/clerk-react';
 import { getHealth } from '../../services/api';
 
 export default function Header() {
+  const { user } = useUser();
+  const { signOut } = useClerk();
   const [status, setStatus] = useState('checking');
   const [theme, setTheme] = useState('light');
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -81,10 +84,20 @@ export default function Header() {
               setShowUserMenu(!showUserMenu);
             }}
           >
-            <div className="user-avatar">A</div>
+            <div className="user-avatar">
+              {user?.imageUrl ? (
+                <img 
+                  src={user.imageUrl} 
+                  alt={user.fullName || 'User'} 
+                  style={{ width: '100%', height: '100%', borderRadius: '8px', objectFit: 'cover' }}
+                />
+              ) : (
+                user?.firstName?.charAt(0)?.toUpperCase() || 'U'
+              )}
+            </div>
             <div className="user-info">
-              <div className="user-name">Admin</div>
-              <div className="user-role">管理員</div>
+              <div className="user-name">{user?.fullName || user?.firstName || 'User'}</div>
+              <div className="user-role">{user?.primaryEmailAddress?.emailAddress || '管理員'}</div>
             </div>
             <ChevronDown size={14} className="dropdown-icon" />
           </button>
@@ -108,7 +121,10 @@ export default function Header() {
                 <span>API 文檔</span>
               </div>
               <div className="dropdown-divider" />
-              <div className="dropdown-item danger">
+              <div 
+                className="dropdown-item danger"
+                onClick={() => signOut()}
+              >
                 <LogOut size={16} />
                 <span>登出</span>
               </div>
