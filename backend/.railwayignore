@@ -1,0 +1,9 @@
+# Railway 部署時忽略的文件
+__pycache__/
+*.pyc
+.env
+.DS_Store
+*.log
+.venv/
+venv/
+

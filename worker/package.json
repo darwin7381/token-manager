@@ -1,0 +1,17 @@
+{
+  "name": "token-manager-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for API Gateway",
+  "main": "src/worker.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "keywords": ["cloudflare", "worker", "api-gateway"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
+

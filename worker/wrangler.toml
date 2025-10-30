@@ -1,0 +1,20 @@
+name = "api-gateway"
+main = "src/worker.js"
+compatibility_date = "2024-10-01"
+
+# KV Namespace 綁定
+# 部署前需要先在 Cloudflare Dashboard 創建 KV Namespace
+# 然後將實際的 ID 填入下方
+[[kv_namespaces]]
+binding = "TOKENS"
+id = "c36cc6c8cc38473dad537a0ab016d83f"
+
+# 使用自定義域名 (可選)
+# 部署後在 Cloudflare Dashboard → Workers → Triggers 中配置
+# routes = [
+#   { pattern = "api.yourcompany.com/*", zone_name = "yourcompany.com" }
+# ]
+
+# 或使用 workers.dev 子域名 (開發環境)
+# workers_dev = true
+

@@ -1,0 +1,33 @@
+# Wrangler 部署說明
+
+## 1. 安裝 Wrangler CLI
+```bash
+npm install -g wrangler
+# 或在專案目錄
+npm install
+```
+
+## 2. 登入 Cloudflare
+```bash
+wrangler login
+```
+
+## 3. 創建 KV Namespace
+```bash
+wrangler kv:namespace create "TOKENS"
+```
+
+## 4. 更新 wrangler.toml
+將上一步返回的 Namespace ID 填入 wrangler.toml 中的 `id` 欄位
+
+## 5. 部署 Worker
+```bash
+npm run deploy
+# 或
+wrangler deploy
+```
+
+## 6. 測試
+部署成功後會顯示 Worker URL,例如:
+https://api-gateway.your-subdomain.workers.dev
+

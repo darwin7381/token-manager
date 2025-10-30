@@ -1,0 +1,5 @@
+# Railway 部署時忽略的文件
+.DS_Store
+*.log
+node_modules/
+
