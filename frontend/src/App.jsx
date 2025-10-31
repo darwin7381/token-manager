@@ -8,6 +8,7 @@ import Footer from './components/Layout/Footer';
 import TokenManager from './components/TokenManager/TokenManager';
 import RouteManager from './components/RouteManager/RouteManager';
 import Stats from './components/Stats/Stats';
+import UserManagement from './components/UserManagement/UserManagement';
 import SignIn from './components/Auth/SignIn';
 import SignUp from './components/Auth/SignUp';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -33,6 +34,7 @@ function Dashboard() {
           {activeTab === 'routes' && <RouteManager />}
           {activeTab === 'stats' && <Stats />}
           {activeTab === 'dashboard' && <Stats />}
+          {activeTab === 'users' && <UserManagement />}
         </div>
         
         <Footer />

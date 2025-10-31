@@ -10,11 +10,14 @@ import {
   Shield,
   Database,
   Globe,
-  FileText
+  FileText,
+  Users
 } from 'lucide-react';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export default function Sidebar({ activeTab, onTabChange, collapsed, onToggleCollapse }) {
   const [expandedSections, setExpandedSections] = useState({});
+  const { canManageUsers } = usePermissions();
 
   const toggleSection = (sectionId) => {
     if (collapsed) return; // 收合時不展開子菜單
@@ -63,6 +66,13 @@ export default function Sidebar({ activeTab, onTabChange, collapsed, onToggleCol
           label: '統計分析',
           onClick: () => onTabChange('stats')
         },
+        // 只有有權限的用戶才能看到用戶管理
+        ...(canManageUsers() ? [{
+          id: 'users',
+          icon: Users,
+          label: '用戶管理',
+          onClick: () => onTabChange('users')
+        }] : []),
         {
           id: 'cloudflare',
           icon: Globe,

@@ -16,6 +16,7 @@ from models import (
 )
 from database import db
 from cloudflare import get_cf_kv
+from user_routes import router as user_router
 
 # 加載環境變數
 load_dotenv()
@@ -26,6 +27,9 @@ app = FastAPI(
     description="API Token 集中管理系統",
     version="1.0.0"
 )
+
+# 註冊用戶管理路由
+app.include_router(user_router)
 
 # 配置 CORS
 app.add_middleware(

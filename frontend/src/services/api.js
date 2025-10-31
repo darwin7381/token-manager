@@ -109,3 +109,21 @@ export const getHealth = async () => {
   return response.json();
 };
 
+// ==================== User Management API ====================
+
+export const updateUserRole = async (userId, roleData, token) => {
+  const response = await fetch(`${API_URL}/api/users/${userId}/role`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(roleData)
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to update user role');
+  }
+  return response.json();
+};
+
