@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { Users, Shield, Search, UserPlus } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
 import { usePermissions } from '../../hooks/usePermissions';
-import { ROLES, TEAMS, getRoleInfo, getTeamInfo } from '../../constants/roles';
-import { updateUserRole } from '../../services/api';
+import { getRoleInfo, getTeamInfo } from '../../constants/roles';
+import { updateUserTeamRole, addUserToTeam, removeUserFromTeam } from '../../services/api';
 import EditUserModal from './EditUserModal';
 
 export default function UserManagement() {
-  const { canManageUsers, isAdmin } = usePermissions();
+  const { canAccessUserManagement, isAdmin, getAllTeamRoles } = usePermissions();
   const { getToken } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,16 +25,14 @@ export default function UserManagement() {
       setLoading(true);
       setError(null);
       
-      // 獲取 Clerk session token
       const token = await getToken();
       
       if (!token) {
         throw new Error('無法獲取認證 token，請重新登入');
       }
       
-      console.log('Fetching users with token:', token ? 'Token exists' : 'No token');
+      console.log('Fetching users...');
       
-      // 調用後端 API 獲取用戶列表
       const response = await fetch('http://localhost:8000/api/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -63,59 +61,101 @@ export default function UserManagement() {
     setShowEditModal(true);
   };
 
-  const handleUpdateUser = async (userId, roleData) => {
+  const handleUserAction = async (userId, actionData) => {
     try {
       setError(null);
       
-      // 獲取 Clerk session token
       const token = await getToken();
       
       if (!token) {
         throw new Error('無法獲取認證 token，請重新登入');
       }
       
-      console.log('Updating user role:', { userId, roleData });
+      console.log('User action:', actionData);
       
-      // 調用後端 API 更新用戶
-      const result = await updateUserRole(userId, roleData, token);
+      if (actionData.action === 'update') {
+        // 更新團隊角色
+        await updateUserTeamRole(userId, actionData.teamId, actionData.role, token);
+      } else if (actionData.action === 'add') {
+        // 添加到團隊
+        await addUserToTeam(userId, actionData.teamId, actionData.role, token);
+      } else if (actionData.action === 'remove') {
+        // 從團隊移除
+        await removeUserFromTeam(userId, actionData.teamId, token);
+      }
       
-      console.log('User role updated successfully:', result);
+      console.log('Action completed successfully');
       
-      // 重新獲取用戶列表以顯示最新資料
-      await fetchUsers();
+      // 重新獲取用戶列表
+      const response = await fetch('http://localhost:8000/api/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
       
-      // 關閉 modal
-      setShowEditModal(false);
+      if (response.ok) {
+        const updatedUsers = await response.json();
+        setUsers(updatedUsers);
+        
+        // 更新 Modal 中的 selectedUser 數據
+        if (selectedUser && selectedUser.id === userId) {
+          const updatedUser = updatedUsers.find(u => u.id === userId);
+          if (updatedUser) {
+            setSelectedUser(updatedUser);
+          }
+        }
+      }
       
     } catch (error) {
-      console.error('Failed to update user:', error);
-      setError(`更新用戶失敗：${error.message}`);
-      // 不關閉 modal，讓用戶可以重試
-      throw error; // 拋出錯誤讓 EditUserModal 也能處理
+      console.error('Failed to perform action:', error);
+      setError(`操作失敗：${error.message}`);
+      throw error;
     }
   };
 
-  // 從 metadata 獲取角色和團隊
-  const getUserRole = (user) => {
-    return user.publicMetadata?.['tokenManager:role'] || 'VIEWER';
+  // 獲取用戶的團隊角色
+  const getUserTeamRoles = (user) => {
+    return user.publicMetadata?.['tokenManager:teamRoles'] || {};
   };
-
-  const getUserTeam = (user) => {
-    return user.publicMetadata?.['tokenManager:team'] || null;
+  
+  // 獲取用戶的最高角色
+  const getUserHighestRole = (user) => {
+    const teamRoles = getUserTeamRoles(user);
+    const roles = Object.values(teamRoles);
+    
+    if (roles.length === 0) return 'VIEWER';
+    
+    const hierarchy = ['VIEWER', 'DEVELOPER', 'MANAGER', 'ADMIN'];
+    let highest = 'VIEWER';
+    
+    roles.forEach(role => {
+      if (hierarchy.indexOf(role) > hierarchy.indexOf(highest)) {
+        highest = role;
+      }
+    });
+    
+    return highest;
+  };
+  
+  // 獲取最後登入時間
+  const getLastSignInAt = (user) => {
+    return user.lastSignInAt;
   };
 
   // 過濾用戶
   const filteredUsers = users.filter(user => {
     const query = searchQuery.toLowerCase();
+    const highestRole = getUserHighestRole(user);
     return (
       user.email?.toLowerCase().includes(query) ||
       user.firstName?.toLowerCase().includes(query) ||
       user.lastName?.toLowerCase().includes(query) ||
-      getUserRole(user).toLowerCase().includes(query)
+      highestRole.toLowerCase().includes(query)
     );
   });
 
-  if (!canManageUsers()) {
+  if (!canAccessUserManagement()) {
     return (
       <div className="section">
         <h2><Shield size={20} /> 權限不足</h2>
@@ -153,16 +193,19 @@ export default function UserManagement() {
         </div>
       </div>
 
+      {/* 錯誤提示 */}
+      {error && (
+        <div className="section">
+          <div className="error-message">
+            ❌ {error}
+          </div>
+        </div>
+      )}
+
       {/* 用戶列表 */}
       <div className="section">
         {loading ? (
           <div className="loading">載入用戶列表...</div>
-        ) : error ? (
-          <div className="error-message">
-            ❌ 載入失敗：{error}
-            <br />
-            <small>請確保後端服務正在運行，並且已實現 /api/users 端點</small>
-          </div>
         ) : filteredUsers.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">👥</div>
@@ -173,19 +216,45 @@ export default function UserManagement() {
             <thead>
               <tr>
                 <th>用戶</th>
-                <th>角色</th>
+                <th>最高角色</th>
                 <th>團隊</th>
-                <th>加入時間</th>
+                <th>最後登入</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {filteredUsers.map(user => {
-                const role = getUserRole(user);
-                const team = getUserTeam(user);
-                const roleInfo = getRoleInfo(role);
-                const teamInfo = team ? getTeamInfo(team) : null;
-                const joinedAt = user.publicMetadata?.['tokenManager:joinedAt'];
+                const teamRoles = getUserTeamRoles(user);
+                const userTeams = Object.keys(teamRoles);
+                const highestRole = getUserHighestRole(user);
+                const roleInfo = getRoleInfo(highestRole);
+                const lastSignInAt = getLastSignInAt(user);
+                
+                // 檢查是否可以管理此用戶
+                // 條件：至少可以編輯一個團隊 OR 可以邀請到我的團隊
+                const myTeamRoles = getAllTeamRoles();
+                const myTeams = Object.keys(myTeamRoles);
+                
+                // 檢查是否至少可以編輯一個現有團隊
+                const canEditAnyTeam = userTeams.some(teamId => {
+                  const myRole = myTeamRoles[teamId];
+                  const targetRole = teamRoles[teamId];
+                  
+                  if (!myRole || !['ADMIN', 'MANAGER'].includes(myRole)) return false;
+                  if (myRole === 'MANAGER' && ['ADMIN', 'MANAGER'].includes(targetRole)) return false;
+                  
+                  return true;
+                });
+                
+                // 檢查是否可以邀請到我的團隊
+                const canInviteToMyTeams = myTeams.some(teamId => {
+                  const myRole = myTeamRoles[teamId];
+                  // 如果我在這個團隊是 ADMIN/MANAGER，且目標用戶不在這個團隊
+                  return ['ADMIN', 'MANAGER'].includes(myRole) && !userTeams.includes(teamId);
+                });
+                
+                // 只要滿足任一條件就可以管理
+                const canManage = canEditAnyTeam || canInviteToMyTeams;
 
                 return (
                   <tr key={user.id}>
@@ -214,7 +283,7 @@ export default function UserManagement() {
                       </div>
                     </td>
 
-                    {/* 角色 */}
+                    {/* 最高角色 */}
                     <td>
                       <div 
                         className="badge" 
@@ -234,37 +303,72 @@ export default function UserManagement() {
 
                     {/* 團隊 */}
                     <td>
-                      {teamInfo ? (
-                        <div 
-                          className="badge badge-info"
-                          style={{
-                            backgroundColor: `${teamInfo.color}15`,
-                            color: teamInfo.color,
-                            borderColor: `${teamInfo.color}30`
-                          }}
-                        >
-                          {teamInfo.name}
+                      {userTeams.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          {userTeams.map(teamId => {
+                            const teamInfo = getTeamInfo(teamId);
+                            const role = teamRoles[teamId];
+                            const roleInfo = getRoleInfo(role);
+                            
+                            return teamInfo ? (
+                              <div 
+                                key={teamId}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontSize: '12px'
+                                }}
+                              >
+                                <span 
+                                  className="badge badge-info"
+                                  style={{
+                                    backgroundColor: `${teamInfo.color}15`,
+                                    color: teamInfo.color,
+                                    borderColor: `${teamInfo.color}30`,
+                                    fontSize: '11px',
+                                    padding: '2px 6px'
+                                  }}
+                                >
+                                  {teamInfo.name}
+                                </span>
+                                <span style={{ color: 'var(--text-tertiary)' }}>
+                                  {roleInfo.icon} {role}
+                                </span>
+                              </div>
+                            ) : null;
+                          })}
                         </div>
                       ) : (
                         <span style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>-</span>
                       )}
                     </td>
 
-                    {/* 加入時間 */}
+                    {/* 最後登入時間 */}
                     <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                      {joinedAt ? new Date(joinedAt).toLocaleDateString('zh-TW') : '-'}
+                      {lastSignInAt ? new Date(lastSignInAt).toLocaleDateString('zh-TW', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : '-'}
                     </td>
 
                     {/* 操作 */}
                     <td>
-                      {canManageUsers(user) && (
-                        <button 
-                          className="btn btn-secondary btn-small"
-                          onClick={() => handleEditUser(user)}
-                        >
-                          編輯
-                        </button>
-                      )}
+                      <button 
+                        className="btn btn-secondary btn-small"
+                        onClick={() => handleEditUser(user)}
+                        disabled={!canManage}
+                        style={{
+                          opacity: canManage ? 1 : 0.5,
+                          cursor: canManage ? 'pointer' : 'not-allowed'
+                        }}
+                        title={!canManage ? '你沒有權限管理此用戶' : ''}
+                      >
+                        編輯
+                      </button>
                     </td>
                   </tr>
                 );
@@ -278,11 +382,13 @@ export default function UserManagement() {
       {showEditModal && selectedUser && (
         <EditUserModal
           user={selectedUser}
-          onClose={() => setShowEditModal(false)}
-          onSave={handleUpdateUser}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedUser(null);
+          }}
+          onSave={handleUserAction}
         />
       )}
     </div>
   );
 }
-

@@ -1,52 +1,52 @@
 """
-用戶管理 API 路由
+用戶管理 API 路由 - Per-Team Roles 架構
 """
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Dict, Any
 from pydantic import BaseModel
-import os
-from clerk_auth import verify_clerk_token, check_permission, NAMESPACE, clerk_client
+from clerk_auth import verify_clerk_token, get_user_role_in_team, get_user_teams, get_all_user_team_roles, get_highest_role, check_permission, NAMESPACE, clerk_client
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
-class UpdateRoleRequest(BaseModel):
+class UpdateTeamRoleRequest(BaseModel):
+    team_id: str
     role: str
-    team: str = None
+
+class AddToTeamRequest(BaseModel):
+    team_id: str
+    role: str
 
 @router.get("")
 async def list_users(current_user: Dict[str, Any] = Depends(verify_clerk_token)):
     """
     獲取所有用戶列表
-    需要 MANAGER 以上權限
+    需要至少是 MANAGER（在任一團隊）
     """
-    # 檢查權限
+    # 檢查用戶的最高角色
     if not check_permission(current_user, "MANAGER"):
         raise HTTPException(status_code=403, detail="Permission denied")
     
     try:
-        # 使用 Clerk SDK 獲取所有用戶（正確的 API 用法）
         users_response = clerk_client.users.list(request={
             "limit": 100,
             "offset": 0
         })
         
-        # 轉換為字典列表（統一前端命名）
         users = []
         for user in users_response:
-            # 提取主要 email
             primary_email = None
             if user.email_addresses and len(user.email_addresses) > 0:
-                # email_addresses 是物件列表，需要獲取 email_address 屬性
                 primary_email = user.email_addresses[0].email_address if hasattr(user.email_addresses[0], 'email_address') else str(user.email_addresses[0])
             
             users.append({
                 "id": user.id,
-                "email": primary_email,  # 前端用 user.email
-                "firstName": user.first_name,  # 前端用 user.firstName
-                "lastName": user.last_name,  # 前端用 user.lastName
-                "imageUrl": user.image_url,  # 前端用 user.imageUrl
-                "publicMetadata": user.public_metadata or {},  # 前端用 user.publicMetadata
-                "createdAt": user.created_at
+                "email": primary_email,
+                "firstName": user.first_name,
+                "lastName": user.last_name,
+                "imageUrl": user.image_url,
+                "publicMetadata": user.public_metadata or {},
+                "createdAt": user.created_at,
+                "lastSignInAt": user.last_sign_in_at
             })
         
         print(f"✅ Returning {len(users)} users")
@@ -56,75 +56,239 @@ async def list_users(current_user: Dict[str, Any] = Depends(verify_clerk_token))
         print(f"❌ Failed to fetch users: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch users: {str(e)}")
 
-@router.put("/{user_id}/role")
-async def update_user_role(
+@router.put("/{user_id}/team-role")
+async def update_team_role(
     user_id: str,
-    data: UpdateRoleRequest,
+    data: UpdateTeamRoleRequest,
     current_user: Dict[str, Any] = Depends(verify_clerk_token)
 ):
     """
-    更新用戶角色
-    ADMIN 可以更新所有人
-    MANAGER 只能更新自己團隊的成員
-    """
-    # 檢查權限
-    if not check_permission(current_user, "MANAGER"):
-        raise HTTPException(status_code=403, detail="Permission denied")
+    更新用戶在特定團隊的角色
     
-    # 驗證角色
+    規則：
+    - 只能編輯你所在團隊的成員
+    - ADMIN 可以設置任何角色
+    - MANAGER 不能設置或編輯 ADMIN/MANAGER
+    """
+    
+    # === 1. 驗證角色 ===
     valid_roles = ["ADMIN", "MANAGER", "DEVELOPER", "VIEWER"]
     if data.role not in valid_roles:
         raise HTTPException(status_code=400, detail=f"Invalid role: {data.role}")
     
-    # MANAGER 和 DEVELOPER 必須有團隊
-    if data.role in ["MANAGER", "DEVELOPER"] and not data.team:
-        raise HTTPException(status_code=400, detail=f"{data.role} role requires a team")
+    # === 2. 獲取當前用戶在該團隊的角色 ===
+    my_role_in_team = get_user_role_in_team(current_user, data.team_id)
     
-    # 獲取目標用戶資訊
+    if not my_role_in_team:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You are not a member of team: {data.team_id}"
+        )
+    
+    if my_role_in_team not in ["ADMIN", "MANAGER"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only ADMIN or MANAGER can manage team members"
+        )
+    
+    # === 3. 獲取目標用戶信息 ===
     try:
         target_user = clerk_client.users.get(user_id=user_id)
-        existing_metadata = dict(target_user.public_metadata or {})
+        target_metadata = dict(target_user.public_metadata or {})
+        target_team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+        target_role_in_team = target_team_roles.get(data.team_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch target user: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch user: {str(e)}")
     
-    # 如果不是 ADMIN，檢查是否只能管理自己團隊
-    current_role = current_user.get("public_metadata", {}).get(f"{NAMESPACE}:role")
-    if current_role == "MANAGER":
-        current_team = current_user.get("public_metadata", {}).get(f"{NAMESPACE}:team")
-        target_team = existing_metadata.get(f"{NAMESPACE}:team")
-        
-        # MANAGER 只能管理自己團隊的成員
-        if target_team != current_team:
+    # === 4. MANAGER 的限制 ===
+    if my_role_in_team == "MANAGER":
+        # MANAGER 不能設置 ADMIN 或 MANAGER 角色
+        if data.role in ["ADMIN", "MANAGER"]:
             raise HTTPException(
-                status_code=403, 
-                detail="You can only manage users in your team"
+                status_code=403,
+                detail="MANAGER cannot assign ADMIN or MANAGER roles"
+            )
+        
+        # MANAGER 不能編輯 ADMIN 或 MANAGER
+        if target_role_in_team in ["ADMIN", "MANAGER"]:
+            raise HTTPException(
+                status_code=403,
+                detail="MANAGER cannot edit users with ADMIN or MANAGER role in this team"
             )
     
-    # 構建要更新的 metadata（合併現有的非 tokenManager 欄位）
-    # 保留其他應用的 metadata，只更新 tokenManager 的欄位
-    updated_metadata = existing_metadata.copy()
-    updated_metadata[f"{NAMESPACE}:role"] = data.role
-    updated_metadata[f"{NAMESPACE}:updatedAt"] = __import__('datetime').datetime.utcnow().isoformat() + "Z"
+    # === 5. 更新該團隊的角色 ===
+    team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+    team_roles[data.team_id] = data.role
     
-    # 設置或清除團隊
-    if data.team:
-        updated_metadata[f"{NAMESPACE}:team"] = data.team
-    else:
-        # 如果角色不需要團隊（ADMIN, VIEWER），移除團隊欄位
-        updated_metadata.pop(f"{NAMESPACE}:team", None)
+    updated_metadata = target_metadata.copy()
+    updated_metadata[f"{NAMESPACE}:teamRoles"] = team_roles
     
-    # 更新用戶 metadata
     try:
         clerk_client.users.update_metadata(
             user_id=user_id,
             public_metadata=updated_metadata
         )
         
-        print(f"✅ Successfully updated user {user_id}: role={data.role}, team={data.team}")
-        
-        return {"success": True, "user_id": user_id, "role": data.role, "team": data.team}
-            
+        print(f"✅ Updated user {user_id} in team {data.team_id}: role={data.role}")
+        return {
+            "success": True,
+            "user_id": user_id,
+            "team_id": data.team_id,
+            "role": data.role
+        }
+    
     except Exception as e:
-        print(f"❌ Failed to update user {user_id}: {str(e)}")
+        print(f"❌ Failed to update user: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
 
+@router.post("/{user_id}/team-membership")
+async def add_user_to_team(
+    user_id: str,
+    data: AddToTeamRequest,
+    current_user: Dict[str, Any] = Depends(verify_clerk_token)
+):
+    """
+    添加用戶到團隊並分配角色
+    
+    規則：
+    - 只有該團隊的 ADMIN/MANAGER 可以添加成員
+    - MANAGER 不能添加 ADMIN/MANAGER 角色
+    """
+    
+    # === 1. 驗證角色 ===
+    valid_roles = ["ADMIN", "MANAGER", "DEVELOPER", "VIEWER"]
+    if data.role not in valid_roles:
+        raise HTTPException(status_code=400, detail=f"Invalid role: {data.role}")
+    
+    # === 2. 檢查當前用戶在該團隊的權限 ===
+    my_role_in_team = get_user_role_in_team(current_user, data.team_id)
+    
+    if not my_role_in_team:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You are not a member of team: {data.team_id}"
+        )
+    
+    if my_role_in_team not in ["ADMIN", "MANAGER"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only ADMIN or MANAGER can add team members"
+        )
+    
+    # === 3. MANAGER 限制 ===
+    if my_role_in_team == "MANAGER" and data.role in ["ADMIN", "MANAGER"]:
+        raise HTTPException(
+            status_code=403,
+            detail="MANAGER cannot assign ADMIN or MANAGER roles"
+        )
+    
+    # === 4. 獲取目標用戶並添加到團隊 ===
+    try:
+        target_user = clerk_client.users.get(user_id=user_id)
+        target_metadata = dict(target_user.public_metadata or {})
+        team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+        
+        # 檢查是否已在團隊
+        if data.team_id in team_roles:
+            raise HTTPException(
+                status_code=400,
+                detail=f"User is already a member of team: {data.team_id}"
+            )
+        
+        # 添加到團隊
+        team_roles[data.team_id] = data.role
+        
+        updated_metadata = target_metadata.copy()
+        updated_metadata[f"{NAMESPACE}:teamRoles"] = team_roles
+        
+        clerk_client.users.update_metadata(
+            user_id=user_id,
+            public_metadata=updated_metadata
+        )
+        
+        print(f"✅ Added user {user_id} to team {data.team_id} as {data.role}")
+        return {
+            "success": True,
+            "user_id": user_id,
+            "team_id": data.team_id,
+            "role": data.role
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Failed to add user to team: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add user to team: {str(e)}")
+
+@router.delete("/{user_id}/team-membership/{team_id}")
+async def remove_user_from_team(
+    user_id: str,
+    team_id: str,
+    current_user: Dict[str, Any] = Depends(verify_clerk_token)
+):
+    """
+    從團隊移除用戶
+    
+    規則：
+    - 只有該團隊的 ADMIN/MANAGER 可以移除成員
+    - MANAGER 不能移除 ADMIN/MANAGER
+    """
+    
+    # === 1. 檢查當前用戶在該團隊的權限 ===
+    my_role_in_team = get_user_role_in_team(current_user, team_id)
+    
+    if not my_role_in_team:
+        raise HTTPException(
+            status_code=403,
+            detail=f"You are not a member of team: {team_id}"
+        )
+    
+    if my_role_in_team not in ["ADMIN", "MANAGER"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Only ADMIN or MANAGER can remove team members"
+        )
+    
+    # === 2. 獲取目標用戶 ===
+    try:
+        target_user = clerk_client.users.get(user_id=user_id)
+        target_metadata = dict(target_user.public_metadata or {})
+        team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+        target_role_in_team = team_roles.get(team_id)
+        
+        if not target_role_in_team:
+            raise HTTPException(
+                status_code=404,
+                detail=f"User is not a member of team: {team_id}"
+            )
+        
+        # === 3. MANAGER 限制 ===
+        if my_role_in_team == "MANAGER" and target_role_in_team in ["ADMIN", "MANAGER"]:
+            raise HTTPException(
+                status_code=403,
+                detail="MANAGER cannot remove users with ADMIN or MANAGER role"
+            )
+        
+        # === 4. 從團隊移除 ===
+        del team_roles[team_id]
+        
+        updated_metadata = target_metadata.copy()
+        updated_metadata[f"{NAMESPACE}:teamRoles"] = team_roles
+        
+        clerk_client.users.update_metadata(
+            user_id=user_id,
+            public_metadata=updated_metadata
+        )
+        
+        print(f"✅ Removed user {user_id} from team {team_id}")
+        return {
+            "success": True,
+            "user_id": user_id,
+            "team_id": team_id
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Failed to remove user from team: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove user from team: {str(e)}")

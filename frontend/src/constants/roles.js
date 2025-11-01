@@ -12,18 +12,22 @@ export const ROLES = {
   ADMIN: {
     id: 'ADMIN',
     name: '系統管理員',
-    scope: 'global',
+    scope: 'team',  // 改為 team，統一處理
     color: '#ef4444', // 紅色
     icon: '👑',
     permissions: ['*'],
-    description: '可以管理所有資源、用戶和系統設定',
+    description: '可以管理所選團隊的所有資源、用戶和系統設定',
     features: [
-      '查看和管理所有 Token',
-      '查看和管理所有路由',
-      '管理所有用戶的權限',
+      '查看和管理所選團隊的 Token',
+      '查看和管理所選團隊的路由',
+      '管理所選團隊的用戶權限',
       '查看審計日誌',
       '系統設定'
-    ]
+    ],
+    requiresTeam: true,  // 所有角色都需要至少一個團隊（可以是 ALL）
+    canManageUsers: true,
+    canManageAllResources: true,
+    canViewAuditLogs: true
   },
   
   MANAGER: {
@@ -39,14 +43,17 @@ export const ROLES = {
       'delete:team',
       'manage:team-members'
     ],
-    description: '可以管理自己團隊的所有資源',
+    description: '可以管理所選團隊的所有資源（可選擇多個團隊或全部團隊）',
     features: [
-      '查看所有 Token 和路由',
-      '創建團隊的 Token 和路由',
-      '編輯和刪除團隊的資源',
-      '管理團隊成員（不包括其他團隊）'
+      '查看所選團隊的 Token 和路由',
+      '創建所選團隊的 Token 和路由',
+      '編輯和刪除所選團隊的資源',
+      '管理所選團隊的成員'
     ],
-    requiresTeam: true
+    requiresTeam: true,
+    canManageUsers: true,
+    canManageAllResources: true,
+    canViewAuditLogs: false
   },
   
   DEVELOPER: {
@@ -61,28 +68,35 @@ export const ROLES = {
       'update:own',
       'delete:own'
     ],
-    description: '可以創建和管理自己的資源',
+    description: '可以在所選團隊內創建和管理自己的資源（可選擇多個團隊或全部團隊）',
     features: [
-      '查看所有 Token 和路由',
-      '創建自己的 Token 和路由',
+      '查看所選團隊的 Token 和路由',
+      '在所選團隊內創建自己的 Token 和路由',
       '編輯和刪除自己創建的資源'
     ],
-    requiresTeam: true
+    requiresTeam: true,
+    canManageUsers: false,
+    canManageAllResources: false,
+    canViewAuditLogs: false
   },
   
   VIEWER: {
     id: 'VIEWER',
     name: '檢視者',
-    scope: 'global',
+    scope: 'team',  // 改為 team，統一處理
     color: '#6b7280', // 灰色
     icon: '👁️',
     permissions: ['read:all'],
-    description: '只能查看所有資源，無法進行任何修改',
+    description: '可以查看所選團隊的資源，但不能修改（可選擇多個團隊或全部團隊）',
     features: [
-      '查看所有 Token',
-      '查看所有路由',
+      '查看所選團隊的 Token',
+      '查看所選團隊的路由',
       '查看統計數據'
-    ]
+    ],
+    requiresTeam: true,  // 所有角色都需要至少一個團隊（可以是 ALL）
+    canManageUsers: false,
+    canManageAllResources: false,
+    canViewAuditLogs: false
   }
 };
 
@@ -90,6 +104,15 @@ export const ROLES = {
  * 團隊定義（可以從後端動態獲取，這裡先定義預設值）
  */
 export const TEAMS = {
+  ALL: {
+    id: 'all',
+    name: '全部團隊',
+    description: '管理所有團隊的資源（僅 ADMIN 可用）',
+    color: '#8b5cf6',  // 紫色
+    icon: '🌐',
+    isSpecial: true,  // 標記為特殊團隊
+    adminOnly: true  // 僅 ADMIN 可用
+  },
   PLATFORM: {
     id: 'platform-team',
     name: 'Platform Team',

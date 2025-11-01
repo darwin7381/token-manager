@@ -1,7 +1,7 @@
 """
-Clerk 認證和權限驗證
+Clerk 認證和權限驗證 - Per-Team Roles 架構
 """
-from fastapi import HTTPException, Request, Header
+from fastapi import HTTPException, Request
 from typing import Dict, Any, Optional
 import os
 import httpx
@@ -9,13 +9,11 @@ from dotenv import load_dotenv
 from clerk_backend_api import Clerk
 from clerk_backend_api.security.types import AuthenticateRequestOptions
 
-# 確保環境變數已載入
 load_dotenv()
 
 CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY", "")
 NAMESPACE = "tokenManager"
 
-# 檢查 Secret Key 是否存在
 if not CLERK_SECRET_KEY:
     raise ValueError("CLERK_SECRET_KEY not found in environment variables")
 
@@ -25,16 +23,11 @@ print(f"✅ Clerk Secret Key loaded: {CLERK_SECRET_KEY[:20]}...")
 clerk_client = Clerk(bearer_auth=CLERK_SECRET_KEY)
 
 async def verify_clerk_token(request: Request) -> Dict[str, Any]:
-    """
-    驗證 Clerk session token 並返回用戶資訊
-    使用官方 Clerk SDK
-    """
+    """驗證 Clerk session token 並返回用戶資訊"""
     try:
-        # 獲取 Authorization header
         auth_header = request.headers.get('authorization', '')
         print(f"🔍 Authorization header: {auth_header[:50] if auth_header else 'None'}...")
         
-        # 構建 httpx.Request
         httpx_request = httpx.Request(
             method=request.method,
             url=str(request.url),
@@ -43,7 +36,6 @@ async def verify_clerk_token(request: Request) -> Dict[str, Any]:
         
         print(f"🔍 Authenticating request to: {request.url}")
         
-        # 使用 Clerk SDK 的 authenticate_request
         request_state = clerk_client.authenticate_request(
             httpx_request,
             AuthenticateRequestOptions(
@@ -52,8 +44,6 @@ async def verify_clerk_token(request: Request) -> Dict[str, Any]:
         )
         
         print(f"🔍 Request state - is_signed_in: {request_state.is_signed_in}")
-        print(f"🔍 Request state - reason: {request_state.reason}")
-        print(f"🔍 Request state - payload: {request_state.payload}")
         
         if not request_state.is_signed_in:
             raise HTTPException(
@@ -61,21 +51,18 @@ async def verify_clerk_token(request: Request) -> Dict[str, Any]:
                 detail=f"User not signed in. Reason: {request_state.reason}"
             )
         
-        # 從 payload 獲取用戶 ID
         if not request_state.payload:
             raise HTTPException(status_code=401, detail="Invalid token: missing payload")
         
-        user_id = request_state.payload.get("sub")  # JWT 標準中 user_id 在 sub claim
+        user_id = request_state.payload.get("sub")
         
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token: missing user ID")
         
         print(f"✅ User authenticated: {user_id}")
         
-        # 獲取用戶完整資訊
         user = clerk_client.users.get(user_id=user_id)
         
-        # 轉換為字典
         user_data = {
             "id": user.id,
             "email_addresses": user.email_addresses,
@@ -94,28 +81,85 @@ async def verify_clerk_token(request: Request) -> Dict[str, Any]:
         print(f"❌ Authentication error: {type(e).__name__}: {str(e)}")
         raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
 
-def get_user_role(user: Dict[str, Any]) -> str:
-    """獲取用戶角色"""
-    return user.get("public_metadata", {}).get(f"{NAMESPACE}:role", "VIEWER")
+# ==================== Per-Team Roles Helper Functions ====================
 
-def get_user_team(user: Dict[str, Any]) -> Optional[str]:
-    """獲取用戶團隊"""
-    return user.get("public_metadata", {}).get(f"{NAMESPACE}:team")
+def get_user_role_in_team(user: Dict[str, Any], team_id: str) -> Optional[str]:
+    """
+    獲取用戶在特定團隊的角色
+    
+    Args:
+        user: 用戶數據（包含 public_metadata）
+        team_id: 團隊 ID
+    
+    Returns:
+        該用戶在該團隊的角色，如果不在該團隊則返回 None
+    """
+    team_roles = user.get("public_metadata", {}).get(f"{NAMESPACE}:teamRoles", {})
+    return team_roles.get(team_id)
+
+def get_user_teams(user: Dict[str, Any]) -> list[str]:
+    """
+    獲取用戶所在的所有團隊
+    
+    Returns:
+        團隊 ID 列表
+    """
+    team_roles = user.get("public_metadata", {}).get(f"{NAMESPACE}:teamRoles", {})
+    return list(team_roles.keys())
+
+def get_all_user_team_roles(user: Dict[str, Any]) -> Dict[str, str]:
+    """
+    獲取用戶的所有團隊角色映射
+    
+    Returns:
+        字典 {team_id: role}
+    """
+    return user.get("public_metadata", {}).get(f"{NAMESPACE}:teamRoles", {})
+
+def get_highest_role(user: Dict[str, Any]) -> str:
+    """
+    獲取用戶的最高角色（用於全局權限檢查，如頁面訪問）
+    
+    Returns:
+        最高角色（ADMIN > MANAGER > DEVELOPER > VIEWER）
+    """
+    team_roles = user.get("public_metadata", {}).get(f"{NAMESPACE}:teamRoles", {})
+    
+    if not team_roles:
+        return "VIEWER"
+    
+    hierarchy = ["VIEWER", "DEVELOPER", "MANAGER", "ADMIN"]
+    highest = "VIEWER"
+    
+    for role in team_roles.values():
+        if role in hierarchy:
+            role_level = hierarchy.index(role)
+            highest_level = hierarchy.index(highest)
+            if role_level > highest_level:
+                highest = role
+    
+    return highest
 
 def check_permission(user: Dict[str, Any], required_role: str) -> bool:
     """
-    檢查用戶是否有足夠的權限
-    角色層級：VIEWER < DEVELOPER < MANAGER < ADMIN
+    檢查用戶的最高角色是否滿足要求
+    用於頁面級別的訪問控制
+    
+    Args:
+        user: 用戶數據
+        required_role: 需要的最低角色
+    
+    Returns:
+        是否有足夠權限
     """
-    role = get_user_role(user)
+    user_highest_role = get_highest_role(user)
     
     hierarchy = ["VIEWER", "DEVELOPER", "MANAGER", "ADMIN"]
     
-    if role not in hierarchy or required_role not in hierarchy:
+    if user_highest_role not in hierarchy or required_role not in hierarchy:
         return False
     
-    user_level = hierarchy.index(role)
+    user_level = hierarchy.index(user_highest_role)
     required_level = hierarchy.index(required_role)
     
     return user_level >= required_level
-
