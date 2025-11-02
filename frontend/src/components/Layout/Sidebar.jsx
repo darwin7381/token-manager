@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Key, 
@@ -15,9 +16,19 @@ import {
 } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 
-export default function Sidebar({ activeTab, onTabChange, collapsed, onToggleCollapse }) {
+export default function Sidebar({ collapsed, onToggleCollapse }) {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [expandedSections, setExpandedSections] = useState({});
   const { canAccessUserManagement } = usePermissions();
+  
+  // 從當前 URL 判斷 active tab
+  const getActiveTab = () => {
+    const path = location.pathname.split('/')[1]; // 取得第一層路徑
+    return path || 'stats'; // 預設為 stats
+  };
+  
+  const activeTab = getActiveTab();
 
   const toggleSection = (sectionId) => {
     if (collapsed) return; // 收合時不展開子菜單
@@ -32,10 +43,10 @@ export default function Sidebar({ activeTab, onTabChange, collapsed, onToggleCol
       title: 'NAVIGATION',
       items: [
         { 
-          id: 'dashboard', 
+          id: 'stats', 
           icon: LayoutDashboard, 
           label: '儀表板',
-          onClick: () => onTabChange('stats')
+          path: '/stats'
         },
       ]
     },
@@ -47,13 +58,13 @@ export default function Sidebar({ activeTab, onTabChange, collapsed, onToggleCol
           icon: Key, 
           label: 'Token 管理',
           badge: null,
-          onClick: () => onTabChange('tokens')
+          path: '/tokens'
         },
         { 
           id: 'routes', 
           icon: Route, 
           label: '路由管理',
-          onClick: () => onTabChange('routes')
+          path: '/routes'
         },
       ]
     },
@@ -61,17 +72,17 @@ export default function Sidebar({ activeTab, onTabChange, collapsed, onToggleCol
       title: '系統',
       items: [
         { 
-          id: 'stats', 
+          id: 'stats-alt', 
           icon: BarChart3, 
           label: '統計分析',
-          onClick: () => onTabChange('stats')
+          path: '/stats'
         },
         // 只有 ADMIN 和 MANAGER 才能看到用戶管理
         ...(canAccessUserManagement() ? [{
           id: 'users',
           icon: Users,
           label: '用戶管理',
-          onClick: () => onTabChange('users')
+          path: '/users'
         }] : []),
         {
           id: 'cloudflare',
@@ -138,6 +149,8 @@ export default function Sidebar({ activeTab, onTabChange, collapsed, onToggleCol
                     onClick={() => {
                       if (hasSubItems) {
                         toggleSection(item.id);
+                      } else if (item.path) {
+                        navigate(item.path);
                       } else if (item.onClick) {
                         item.onClick();
                       }
