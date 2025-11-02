@@ -14,6 +14,8 @@ export default function EditUserModal({ user, onClose, onSave }) {
   const [showAddTeam, setShowAddTeam] = useState(false);
   const [newTeamId, setNewTeamId] = useState('');
   const [newTeamRole, setNewTeamRole] = useState('DEVELOPER');
+  const [showBulkActions, setShowBulkActions] = useState(false);
+  const [bulkRole, setBulkRole] = useState('DEVELOPER');
 
   // 獲取當前用戶可以管理的團隊
   const myTeams = usePermissions().getUserTeams();
@@ -78,6 +80,40 @@ export default function EditUserModal({ user, onClose, onSave }) {
     }
   };
 
+  const handleBulkSetRole = async () => {
+    if (!confirm(`確定要將此用戶設置為所有團隊的 ${bulkRole} 嗎？這將更新 ${availableTeamsToAdd.length + userTeams.length} 個團隊。`)) {
+      return;
+    }
+    
+    try {
+      setSaving(true);
+      
+      // 獲取所有我可以管理的團隊（包括用戶已在的和可以添加的）
+      const allManageableTeams = [...new Set([...userTeams.filter(t => {
+        const myRole = myTeamRoles[t];
+        return myRole === 'ADMIN' || myRole === 'MANAGER';
+      }), ...availableTeamsToAdd])];
+      
+      // 批量設置
+      for (const teamId of allManageableTeams) {
+        const isNewTeam = !userTeams.includes(teamId);
+        await onSave(user.id, {
+          action: isNewTeam ? 'add' : 'update',
+          teamId,
+          role: bulkRole
+        });
+      }
+      
+      setShowBulkActions(false);
+      alert(`成功將用戶設置為 ${allManageableTeams.length} 個團隊的 ${bulkRole}`);
+    } catch (error) {
+      console.error('Failed to bulk set role:', error);
+      alert('批量設置失敗：' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // 獲取可以添加的團隊（用戶還不在的團隊 + 我有權限的團隊 + 我是 ADMIN/MANAGER）
   const availableTeamsToAdd = myTeams.filter(teamId => {
     const myRole = myTeamRoles[teamId];
@@ -126,6 +162,74 @@ export default function EditUserModal({ user, onClose, onSave }) {
             </div>
           </div>
         </div>
+
+        {/* 批量操作 */}
+        {myTeams.length > 1 && (
+          <div style={{ marginBottom: '16px' }}>
+            {!showBulkActions ? (
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowBulkActions(true)}
+                disabled={saving}
+                style={{ 
+                  width: '100%', 
+                  fontSize: '13px',
+                  padding: '8px'
+                }}
+              >
+                🌐 批量設置所有團隊角色
+              </button>
+            ) : (
+              <div style={{
+                padding: '12px',
+                background: '#8b5cf615',
+                borderRadius: '8px',
+                border: '2px solid #8b5cf640'
+              }}>
+                <div style={{ fontSize: '13px', marginBottom: '8px', fontWeight: 600 }}>
+                  批量設置為所有團隊的：
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select
+                    value={bulkRole}
+                    onChange={(e) => setBulkRole(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--border-color)',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <option value="DEVELOPER">💻 開發者</option>
+                    <option value="MANAGER">⭐ 團隊管理者</option>
+                    <option value="ADMIN">👑 系統管理員</option>
+                    <option value="VIEWER">👁️ 檢視者</option>
+                  </select>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => setShowBulkActions(false)}
+                    disabled={saving}
+                    style={{ fontSize: '12px', padding: '6px 12px' }}
+                  >
+                    取消
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={handleBulkSetRole}
+                    disabled={saving}
+                    style={{ fontSize: '12px', padding: '6px 12px' }}
+                  >
+                    {saving ? '設置中...' : '批量設置'}
+                  </button>
+                </div>
+                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '6px' }}>
+                  將更新你有權限管理的所有團隊
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 團隊角色列表 */}
         <div style={{ marginBottom: '20px' }}>
@@ -209,8 +313,9 @@ export default function EditUserModal({ user, onClose, onSave }) {
                         }}
                       >
                         {Object.values(ROLES).map(r => {
+                          // ADMIN 可以選任何角色
                           // MANAGER 不能設置 ADMIN/MANAGER
-                          const selectable = myRoleInTeam === 'ADMIN' || !['ADMIN', 'MANAGER'].includes(r.id);
+                          const selectable = !myRoleInTeam || myRoleInTeam === 'ADMIN' || !['ADMIN', 'MANAGER'].includes(r.id);
                           
                           return (
                             <option key={r.id} value={r.id} disabled={!selectable}>
