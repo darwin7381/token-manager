@@ -1,14 +1,16 @@
 """
 Token Manager - FastAPI 主應用
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 from datetime import datetime, timedelta
 import secrets
 import hashlib
 import os
+import base64
 from dotenv import load_dotenv
+from cryptography.fernet import Fernet
 
 from models import (
     TokenCreate, TokenUpdate, TokenResponse, TokenCreateResponse,
@@ -17,6 +19,9 @@ from models import (
 from database import db
 from cloudflare import get_cf_kv
 from user_routes import router as user_router
+from team_routes import router as team_router
+from invite_routes import router as invite_router
+from clerk_auth import verify_clerk_token, get_user_role_in_team, get_user_teams
 
 # 加載環境變數
 load_dotenv()
@@ -28,8 +33,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 註冊用戶管理路由
+# 註冊路由
 app.include_router(user_router)
+app.include_router(team_router)
+app.include_router(invite_router)
 
 # 配置 CORS
 app.add_middleware(
@@ -73,6 +80,55 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def get_encryption_key() -> bytes:
+    """獲取加密金鑰"""
+    key = os.getenv("TOKEN_ENCRYPTION_KEY")
+    if not key:
+        # 如果沒有設定，生成一個臨時的（僅用於開發）
+        print("⚠️ Warning: TOKEN_ENCRYPTION_KEY not set, using temporary key")
+        key = Fernet.generate_key().decode()
+    
+    # 確保金鑰是正確的格式
+    try:
+        return base64.urlsafe_b64decode(key)
+    except:
+        # 如果不是 base64，直接使用
+        return key.encode()
+
+
+def encrypt_token(token: str) -> str:
+    """加密 Token"""
+    try:
+        key = os.getenv("TOKEN_ENCRYPTION_KEY")
+        if not key:
+            # 生成一個臨時金鑰（開發用）
+            key = Fernet.generate_key().decode()
+            print(f"⚠️ 請設定 TOKEN_ENCRYPTION_KEY 環境變數，臨時金鑰: {key}")
+        
+        cipher = Fernet(key.encode() if isinstance(key, str) else key)
+        encrypted = cipher.encrypt(token.encode())
+        return base64.urlsafe_b64encode(encrypted).decode()
+    except Exception as e:
+        print(f"❌ Token encryption failed: {e}")
+        raise
+
+
+def decrypt_token(encrypted_token: str) -> str:
+    """解密 Token"""
+    try:
+        key = os.getenv("TOKEN_ENCRYPTION_KEY")
+        if not key:
+            raise ValueError("TOKEN_ENCRYPTION_KEY not set")
+        
+        cipher = Fernet(key.encode() if isinstance(key, str) else key)
+        encrypted_bytes = base64.urlsafe_b64decode(encrypted_token.encode())
+        decrypted = cipher.decrypt(encrypted_bytes)
+        return decrypted.decode()
+    except Exception as e:
+        print(f"❌ Token decryption failed: {e}")
+        raise HTTPException(500, f"Failed to decrypt token: {str(e)}")
+
+
 async def log_audit(action: str, entity_type: str, entity_id: int = None, details: dict = None):
     """記錄審計日誌"""
     import json
@@ -85,35 +141,111 @@ async def log_audit(action: str, entity_type: str, entity_id: int = None, detail
         """, action, entity_type, entity_id, details_json)
 
 
+async def check_team_token_permission(user: dict, team_id: str, action: str):
+    """
+    檢查用戶在該團隊是否有權限管理 Token
+    
+    Args:
+        user: 用戶數據（來自 verify_clerk_token）
+        team_id: 團隊 ID
+        action: 操作類型（create, edit, delete）
+    
+    Raises:
+        HTTPException: 如果沒有權限
+    """
+    # 檢查是否是全局 ADMIN
+    global_role = user.get("public_metadata", {}).get("tokenManager:globalRole")
+    if global_role == "ADMIN":
+        return  # 全局 ADMIN 可以做任何事
+    
+    # 檢查在該團隊的角色
+    role = get_user_role_in_team(user, team_id)
+    
+    if not role:
+        raise HTTPException(403, f"You are not a member of team '{team_id}'")
+    
+    # Token 管理權限：ADMIN, MANAGER, DEVELOPER 可以創建
+    # ADMIN, MANAGER 可以編輯和刪除
+    if action == "create":
+        if role not in ["ADMIN", "MANAGER", "DEVELOPER"]:
+            raise HTTPException(403, f"Role '{role}' cannot create tokens. Required: ADMIN, MANAGER, or DEVELOPER")
+    elif action in ["edit", "delete"]:
+        if role not in ["ADMIN", "MANAGER"]:
+            raise HTTPException(403, f"Role '{role}' cannot {action} tokens. Required: ADMIN or MANAGER")
+
+
+async def check_core_team_permission(user: dict, action: str):
+    """
+    檢查用戶是否有 Core Team 權限來管理路由
+    
+    Args:
+        user: 用戶數據（來自 verify_clerk_token）
+        action: 操作類型（create, edit, delete）
+    
+    Raises:
+        HTTPException: 如果沒有權限
+    """
+    # 檢查是否是全局 ADMIN（全局 ADMIN 也可以管理路由）
+    global_role = user.get("public_metadata", {}).get("tokenManager:globalRole")
+    if global_role == "ADMIN":
+        return  # 全局 ADMIN 可以做任何事
+    
+    # 檢查在 core-team 的角色
+    role = get_user_role_in_team(user, "core-team")
+    
+    if not role:
+        raise HTTPException(403, "需要 Core Team 權限才能管理路由")
+    
+    # 路由管理權限：
+    # - 創建: ADMIN, MANAGER, DEVELOPER
+    # - 編輯: ADMIN, MANAGER
+    # - 刪除: ADMIN only
+    if action == "create":
+        if role not in ["ADMIN", "MANAGER", "DEVELOPER"]:
+            raise HTTPException(403, f"Core Team '{role}' 角色無法創建路由。需要：ADMIN, MANAGER 或 DEVELOPER")
+    elif action == "edit":
+        if role not in ["ADMIN", "MANAGER"]:
+            raise HTTPException(403, f"Core Team '{role}' 角色無法編輯路由。需要：ADMIN 或 MANAGER")
+    elif action == "delete":
+        if role != "ADMIN":
+            raise HTTPException(403, f"Core Team '{role}' 角色無法刪除路由。只有 ADMIN 可以刪除")
+
+
 # ==================== Token API ====================
 
 @app.post("/api/tokens", response_model=TokenCreateResponse)
-async def create_token(data: TokenCreate):
+async def create_token(data: TokenCreate, request: Request):
     """創建新的 API Token"""
     try:
+        # 0. 驗證用戶身份和權限
+        user = await verify_clerk_token(request)
+        await check_team_token_permission(user, data.team_id, "create")
+        
         # 1. 生成 token
         token = generate_token()
         token_hash = hash_token(token)
+        token_encrypted = encrypt_token(token)  # 加密儲存
         
         # 2. 計算過期時間
         expires_at = None
-        if data.expires_days:
+        if data.expires_days and data.expires_days > 0:
             expires_at = datetime.utcnow() + timedelta(days=data.expires_days)
+        # 如果 expires_days 是 None 或 0，則永不過期（expires_at = None）
         
-        # 3. 存入資料庫
+        # 3. 存入資料庫（同時儲存 hash 和加密的明文）
         async with db.pool.acquire() as conn:
             token_id = await conn.fetchval("""
-                INSERT INTO tokens (token_hash, name, department, scopes, expires_at)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO tokens (token_hash, token_encrypted, name, team_id, created_by, description, scopes, expires_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
-            """, token_hash, data.name, data.department, data.scopes, expires_at)
+            """, token_hash, token_encrypted, data.name, data.team_id, user["id"], data.description, data.scopes, expires_at)
         
         # 4. 同步到 Cloudflare KV
         try:
             cf_kv = get_cf_kv()
             await cf_kv.put_token(token_hash, {
                 "name": data.name,
-                "department": data.department,
+                "team_id": data.team_id,
                 "scopes": data.scopes,
                 "created_at": datetime.utcnow().isoformat(),
                 "expires_at": expires_at.isoformat() if expires_at else None
@@ -125,14 +257,18 @@ async def create_token(data: TokenCreate):
             raise HTTPException(500, f"Failed to sync to Cloudflare: {str(e)}")
         
         # 5. 記錄審計日誌
-        await log_audit("create", "token", token_id, {"name": data.name})
+        await log_audit("create", "token", token_id, {
+            "name": data.name,
+            "team_id": data.team_id,
+            "created_by": user["id"]
+        })
         
         # 6. 返回 token (只此一次!)
         return TokenCreateResponse(
             id=token_id,
             token=token,
             name=data.name,
-            department=data.department,
+            team_id=data.team_id,
             scopes=data.scopes
         )
     except HTTPException:
@@ -145,28 +281,76 @@ async def create_token(data: TokenCreate):
 
 
 @app.get("/api/tokens", response_model=List[TokenResponse])
-async def list_tokens():
+async def list_tokens(request: Request):
     """列出所有活躍的 tokens (不包含實際 token 值)"""
-    async with db.pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT id, name, department, scopes, created_at, expires_at, last_used
-            FROM tokens
-            WHERE is_active = TRUE
-            ORDER BY created_at DESC
-        """)
+    # 驗證用戶身份
+    user = await verify_clerk_token(request)
     
-    return [TokenResponse(**dict(row)) for row in rows]
+    # 檢查是否是全局 ADMIN
+    global_role = user.get("public_metadata", {}).get("tokenManager:globalRole")
+    
+    async with db.pool.acquire() as conn:
+        if global_role == "ADMIN":
+            # 全局 ADMIN 可以看到所有 Token
+            rows = await conn.fetch("""
+                SELECT id, name, team_id, created_by, description, token_encrypted, scopes, created_at, expires_at, last_used
+                FROM tokens
+                WHERE is_active = TRUE
+                ORDER BY created_at DESC
+            """)
+        else:
+            # 普通用戶只能看到自己所屬團隊的 Token
+            user_teams = get_user_teams(user)
+            if not user_teams:
+                return []  # 用戶不屬於任何團隊
+            
+            rows = await conn.fetch("""
+                SELECT id, name, team_id, created_by, description, token_encrypted, scopes, created_at, expires_at, last_used
+                FROM tokens
+                WHERE is_active = TRUE AND team_id = ANY($1)
+                ORDER BY created_at DESC
+            """, user_teams)
+    
+    # 為每個 Token 生成預覽字串
+    tokens = []
+    for row in rows:
+        token_dict = dict(row)
+        
+        # 生成 token_preview (如果有加密的 Token)
+        if token_dict.get('token_encrypted'):
+            try:
+                full_token = decrypt_token(token_dict['token_encrypted'])
+                # 顯示格式: ntk_abc...xyz (前8個字符 + ... + 後4個字符)
+                if len(full_token) > 16:
+                    token_dict['token_preview'] = f"{full_token[:12]}...{full_token[-6:]}"
+                else:
+                    token_dict['token_preview'] = full_token
+            except:
+                token_dict['token_preview'] = "ntk_***...***"
+        else:
+            token_dict['token_preview'] = "***舊版Token***"
+        
+        # 移除 token_encrypted（不要傳給前端）
+        token_dict.pop('token_encrypted', None)
+        tokens.append(TokenResponse(**token_dict))
+    
+    return tokens
 
 
 @app.put("/api/tokens/{token_id}", response_model=TokenResponse)
-async def update_token(token_id: int, data: TokenUpdate):
-    """更新 Token (名稱、部門、權限)"""
+async def update_token(token_id: int, data: TokenUpdate, request: Request):
+    """更新 Token (名稱、權限)"""
+    # 驗證用戶身份
+    user = await verify_clerk_token(request)
     
     async with db.pool.acquire() as conn:
         # 獲取現有 Token
         token = await conn.fetchrow("SELECT * FROM tokens WHERE id = $1 AND is_active = TRUE", token_id)
         if not token:
             raise HTTPException(404, "Token not found")
+        
+        # 檢查權限
+        await check_team_token_permission(user, token['team_id'], "edit")
         
         # 構建更新語句
         updates = []
@@ -178,9 +362,9 @@ async def update_token(token_id: int, data: TokenUpdate):
             params.append(data.name)
             param_count += 1
         
-        if data.department is not None:
-            updates.append(f"department = ${param_count}")
-            params.append(data.department)
+        if data.description is not None:
+            updates.append(f"description = ${param_count}")
+            params.append(data.description)
             param_count += 1
         
         if data.scopes is not None:
@@ -203,7 +387,7 @@ async def update_token(token_id: int, data: TokenUpdate):
             cf_kv = get_cf_kv()
             await cf_kv.put_token(updated_token['token_hash'], {
                 "name": updated_token['name'],
-                "department": updated_token['department'],
+                "team_id": updated_token['team_id'],
                 "scopes": updated_token['scopes'],
                 "created_at": updated_token['created_at'].isoformat(),
                 "expires_at": updated_token['expires_at'].isoformat() if updated_token['expires_at'] else None
@@ -214,25 +398,64 @@ async def update_token(token_id: int, data: TokenUpdate):
     # 審計日誌
     await log_audit("update", "token", token_id, {
         "name": data.name,
-        "department": data.department,
-        "scopes": data.scopes
+        "scopes": data.scopes,
+        "updated_by": user["id"]
     })
     
     return TokenResponse(**dict(updated_token))
 
 
-@app.delete("/api/tokens/{token_id}")
-async def delete_token(token_id: int):
-    """撤銷 (刪除) token"""
+@app.get("/api/tokens/{token_id}/reveal")
+async def reveal_token(token_id: int, request: Request):
+    """解密並返回 Token 明文 - 需要該團隊權限"""
+    # 驗證用戶身份
+    user = await verify_clerk_token(request)
     
-    # 1. 獲取 token_hash
+    # 獲取 Token 並檢查權限
+    async with db.pool.acquire() as conn:
+        token_row = await conn.fetchrow("""
+            SELECT token_encrypted, team_id FROM tokens 
+            WHERE id = $1 AND is_active = TRUE
+        """, token_id)
+        
+        if not token_row:
+            raise HTTPException(404, "Token not found")
+        
+        if not token_row['token_encrypted']:
+            raise HTTPException(400, "此 Token 無法解密（舊版本 Token）")
+        
+        # 檢查權限（團隊成員才能查看）
+        global_role = user.get("public_metadata", {}).get("tokenManager:globalRole")
+        if global_role != "ADMIN":
+            role = get_user_role_in_team(user, token_row['team_id'])
+            if not role:
+                raise HTTPException(403, "You are not a member of this team")
+    
+    # 解密並返回
+    try:
+        decrypted_token = decrypt_token(token_row['token_encrypted'])
+        return {"token": decrypted_token}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to decrypt token: {str(e)}")
+
+
+@app.delete("/api/tokens/{token_id}")
+async def delete_token(token_id: int, request: Request):
+    """撤銷 (刪除) token"""
+    # 驗證用戶身份
+    user = await verify_clerk_token(request)
+    
+    # 1. 獲取 token 並檢查權限
     async with db.pool.acquire() as conn:
         token = await conn.fetchrow("""
-            SELECT token_hash, name FROM tokens WHERE id = $1
+            SELECT token_hash, name, team_id FROM tokens WHERE id = $1
         """, token_id)
         
         if not token:
             raise HTTPException(404, "Token not found")
+        
+        # 檢查權限
+        await check_team_token_permission(user, token['team_id'], "delete")
         
         # 2. 從資料庫刪除
         await conn.execute("DELETE FROM tokens WHERE id = $1", token_id)
@@ -247,7 +470,11 @@ async def delete_token(token_id: int):
         # 因為 token 已經從數據庫刪除,下次創建會覆蓋 KV
     
     # 4. 記錄審計日誌
-    await log_audit("delete", "token", token_id, {"name": token['name']})
+    await log_audit("delete", "token", token_id, {
+        "name": token['name'],
+        "team_id": token['team_id'],
+        "deleted_by": user["id"]
+    })
     
     return {"status": "deleted"}
 
@@ -255,8 +482,11 @@ async def delete_token(token_id: int):
 # ==================== Route API ====================
 
 @app.post("/api/routes", response_model=RouteResponse)
-async def create_route(data: RouteCreate):
-    """新增微服務路由"""
+async def create_route(data: RouteCreate, request: Request):
+    """新增微服務路由 - 需要 Core Team 權限"""
+    # 驗證用戶身份和權限
+    user = await verify_clerk_token(request)
+    await check_core_team_permission(user, "create")
     
     # 1. 存入資料庫
     async with db.pool.acquire() as conn:
@@ -297,8 +527,11 @@ async def create_route(data: RouteCreate):
 
 
 @app.get("/api/routes", response_model=List[RouteResponse])
-async def list_routes():
-    """列出所有路由"""
+async def list_routes(request: Request):
+    """列出所有路由 - 所有已登入用戶都可以查看"""
+    # 驗證用戶身份（但不檢查特定權限，所有人都可以查看）
+    user = await verify_clerk_token(request)
+    
     async with db.pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT id, name, path, backend_url, description, tags, created_at
@@ -310,8 +543,11 @@ async def list_routes():
 
 
 @app.put("/api/routes/{route_id}", response_model=RouteResponse)
-async def update_route(route_id: int, data: RouteUpdate):
-    """修改路由"""
+async def update_route(route_id: int, data: RouteUpdate, request: Request):
+    """修改路由 - 需要 Core Team ADMIN 或 MANAGER 權限"""
+    # 驗證用戶身份和權限
+    user = await verify_clerk_token(request)
+    await check_core_team_permission(user, "edit")
     
     async with db.pool.acquire() as conn:
         # 獲取現有路由
@@ -367,8 +603,11 @@ async def update_route(route_id: int, data: RouteUpdate):
 
 
 @app.get("/api/routes/tags")
-async def list_tags():
-    """列出所有可用的 tags"""
+async def list_tags(request: Request):
+    """列出所有可用的 tags - 所有已登入用戶都可以查看"""
+    # 驗證用戶身份
+    user = await verify_clerk_token(request)
+    
     async with db.pool.acquire() as conn:
         rows = await conn.fetch("""
             SELECT DISTINCT unnest(tags) as tag
@@ -381,8 +620,11 @@ async def list_tags():
 
 
 @app.delete("/api/routes/{route_id}")
-async def delete_route(route_id: int):
-    """刪除路由"""
+async def delete_route(route_id: int, request: Request):
+    """刪除路由 - 需要 Core Team ADMIN 權限"""
+    # 驗證用戶身份和權限
+    user = await verify_clerk_token(request)
+    await check_core_team_permission(user, "delete")
     
     async with db.pool.acquire() as conn:
         route = await conn.fetchrow("SELECT path FROM routes WHERE id = $1", route_id)

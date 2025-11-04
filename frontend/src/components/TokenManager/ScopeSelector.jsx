@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import { listRoutes, listTags } from '../../services/api';
 
 export default function ScopeSelector({ selectedScopes, onSave, onClose }) {
+  const { getToken } = useAuth();
   const [routes, setRoutes] = useState([]);
   const [tags, setTags] = useState([]);
   const [selected, setSelected] = useState([...selectedScopes]);
@@ -9,9 +11,10 @@ export default function ScopeSelector({ selectedScopes, onSave, onClose }) {
   useEffect(() => {
     const loadData = async () => {
       try {
+        const token = await getToken();
         const [routesData, tagsData] = await Promise.all([
-          listRoutes(),
-          listTags()
+          listRoutes(token),
+          listTags(token)
         ]);
         setRoutes(routesData);
         setTags(tagsData.tags || []);
@@ -20,7 +23,7 @@ export default function ScopeSelector({ selectedScopes, onSave, onClose }) {
       }
     };
     loadData();
-  }, []);
+  }, [getToken]);
 
   const toggleScope = (scope) => {
     setSelected(prev => {

@@ -6,6 +6,7 @@ import TokenManager from './components/TokenManager/TokenManager';
 import RouteManager from './components/RouteManager/RouteManager';
 import Stats from './components/Stats/Stats';
 import UserManagement from './components/UserManagement/UserManagement';
+import TeamManagement from './components/TeamManagement/TeamManagement';
 import SignIn from './components/Auth/SignIn';
 import SignUp from './components/Auth/SignUp';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -34,6 +35,7 @@ function App() {
           <Route path="tokens" element={<TokenManager />} />
           <Route path="routes" element={<RouteManager />} />
           <Route path="users" element={<UserManagement />} />
+          <Route path="teams" element={<TeamManagement />} />
           
           {/* 404 頁面 */}
           <Route path="*" element={<NotFound />} />

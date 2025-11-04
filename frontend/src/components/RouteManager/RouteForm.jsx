@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Shield } from 'lucide-react';
+import { useUser, useAuth } from '@clerk/clerk-react';
 import { createRoute } from '../../services/api';
 import TagInput from './TagInput';
 
 export default function RouteForm({ onRouteCreated }) {
+  const { user } = useUser();
+  const { getToken } = useAuth();
   const [name, setName] = useState('');
   const [path, setPath] = useState('');
   const [backendUrl, setBackendUrl] = useState('');
@@ -11,17 +14,26 @@ export default function RouteForm({ onRouteCreated }) {
   const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // 檢查用戶是否有 Core Team 權限
+  const teamRoles = user?.publicMetadata?.['tokenManager:teamRoles'] || {};
+  const globalRole = user?.publicMetadata?.['tokenManager:globalRole'];
+  const coreRole = teamRoles['core-team'];
+  
+  const canCreate = globalRole === 'ADMIN' || 
+                    (coreRole && ['ADMIN', 'MANAGER', 'DEVELOPER'].includes(coreRole));
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
+      const token = await getToken();
       await createRoute({
         name,
         path,
         backend_url: backendUrl,
         description,
         tags,
-      });
+      }, token);
       
       setName('');
       setPath('');
@@ -36,6 +48,31 @@ export default function RouteForm({ onRouteCreated }) {
       setLoading(false);
     }
   };
+
+  if (!canCreate) {
+    return (
+      <div className="section">
+        <div className="alert" style={{ 
+          backgroundColor: '#fff3cd', 
+          border: '1px solid #ffc107', 
+          padding: '15px', 
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <Shield size={20} color="#856404" />
+          <div>
+            <strong>需要 Core Team 權限</strong>
+            <p style={{ margin: '5px 0 0 0', fontSize: '14px', color: '#856404' }}>
+              只有 Core Team 的 ADMIN, MANAGER 或 DEVELOPER 可以創建路由。
+              請聯繫系統管理員將你加入 Core Team。
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="section">

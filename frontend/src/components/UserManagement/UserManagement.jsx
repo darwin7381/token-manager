@@ -2,23 +2,46 @@ import { useState, useEffect } from 'react';
 import { Users, Shield, Search, UserPlus } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
 import { usePermissions } from '../../hooks/usePermissions';
-import { getRoleInfo, getTeamInfo } from '../../constants/roles';
+import { getRoleInfo } from '../../constants/roles';
 import { updateUserTeamRole, addUserToTeam, removeUserFromTeam } from '../../services/api';
 import EditUserModal from './EditUserModal';
+import InviteUserModal from './InviteUserModal';
 
 export default function UserManagement() {
   const { canAccessUserManagement, isAdmin, getAllTeamRoles } = usePermissions();
   const { getToken } = useAuth();
   const [users, setUsers] = useState([]);
+  const [teams, setTeams] = useState([]);  // 動態獲取的團隊列表
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    fetchTeams();
     fetchUsers();
   }, []);
+
+  const fetchTeams = async () => {
+    try {
+      const token = await getToken();
+      const response = await fetch('http://localhost:8000/api/teams', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setTeams(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch teams:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -114,22 +137,26 @@ export default function UserManagement() {
     }
   };
 
-  // 獲取用戶的團隊角色
+  // 獲取用戶的團隊角色（Per-Team Roles 格式）
   const getUserTeamRoles = (user) => {
     return user.publicMetadata?.['tokenManager:teamRoles'] || {};
   };
   
-  // 獲取用戶的最高角色
+  // 獲取用戶的最高角色（只考慮存在的團隊）
   const getUserHighestRole = (user) => {
     const teamRoles = getUserTeamRoles(user);
-    const roles = Object.values(teamRoles);
     
-    if (roles.length === 0) return 'VIEWER';
+    // 只考慮存在於 DB 的團隊
+    const validRoles = Object.entries(teamRoles)
+      .filter(([teamId, _]) => teams.find(t => t.id === teamId))
+      .map(([_, role]) => role);
+    
+    if (validRoles.length === 0) return 'VIEWER';
     
     const hierarchy = ['VIEWER', 'DEVELOPER', 'MANAGER', 'ADMIN'];
     let highest = 'VIEWER';
     
-    roles.forEach(role => {
+    validRoles.forEach(role => {
       if (hierarchy.indexOf(role) > hierarchy.indexOf(highest)) {
         highest = role;
       }
@@ -173,7 +200,10 @@ export default function UserManagement() {
             <Users size={24} /> 用戶管理
           </h2>
           {isAdmin && (
-            <button className="btn">
+            <button 
+              className="btn"
+              onClick={() => setShowInviteModal(true)}
+            >
               <UserPlus size={18} />
               邀請用戶
             </button>
@@ -305,12 +335,19 @@ export default function UserManagement() {
                     <td>
                       {userTeams.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          {userTeams.map(teamId => {
-                            const teamInfo = getTeamInfo(teamId);
-                            const role = teamRoles[teamId];
-                            const roleInfo = getRoleInfo(role);
+                          {userTeams
+                            .filter(teamId => {
+                              // 只顯示存在於 DB 的團隊（自動過濾孤兒數據）
+                              const teamInfo = teams.find(t => t.id === teamId);
+                              return teamInfo !== undefined;
+                            })
+                            .map(teamId => {
+                              // 從動態獲取的團隊列表中查找
+                              const teamInfo = teams.find(t => t.id === teamId);
+                              const role = teamRoles[teamId];
+                              const roleInfo = getRoleInfo(role);
                             
-                            return teamInfo ? (
+                            return (
                               <div 
                                 key={teamId}
                                 style={{
@@ -330,13 +367,13 @@ export default function UserManagement() {
                                     padding: '2px 6px'
                                   }}
                                 >
-                                  {teamInfo.name}
+                                  {teamInfo.icon || '👥'} {teamInfo.name}
                                 </span>
                                 <span style={{ color: 'var(--text-tertiary)' }}>
                                   {roleInfo.icon} {role}
                                 </span>
                               </div>
-                            ) : null;
+                            );
                           })}
                         </div>
                       ) : (
@@ -387,6 +424,16 @@ export default function UserManagement() {
             setSelectedUser(null);
           }}
           onSave={handleUserAction}
+        />
+      )}
+
+      {/* 邀請用戶 Modal */}
+      {showInviteModal && (
+        <InviteUserModal
+          onClose={() => {
+            setShowInviteModal(false);
+            fetchUsers();  // 刷新列表（雖然新用戶要等註冊後才會出現）
+          }}
         />
       )}
     </div>

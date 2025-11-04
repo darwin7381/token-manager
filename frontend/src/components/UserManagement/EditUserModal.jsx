@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Shield, Users as UsersIcon, Plus, X } from 'lucide-react';
-import { ROLES, TEAMS, getRoleInfo, getTeamInfo } from '../../constants/roles';
+import { ROLES, getRoleInfo } from '../../constants/roles';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useAuth } from '@clerk/clerk-react';
 
 export default function EditUserModal({ user, onClose, onSave }) {
+  const { getToken } = useAuth();
   const { getUserRoleInTeam, canEditUserInTeam, canRemoveUserFromTeam } = usePermissions();
   
   // 獲取用戶的團隊角色
@@ -20,6 +22,36 @@ export default function EditUserModal({ user, onClose, onSave }) {
   // 獲取當前用戶可以管理的團隊
   const myTeams = usePermissions().getUserTeams();
   const myTeamRoles = usePermissions().getAllTeamRoles();
+  
+  // 動態獲取所有團隊
+  const [allTeams, setAllTeams] = useState([]);
+  
+  useEffect(() => {
+    fetchAllTeams();
+  }, []);
+  
+  const fetchAllTeams = async () => {
+    try {
+      const token = await getToken();
+      const response = await fetch('http://localhost:8000/api/teams', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAllTeams(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch teams:', error);
+    }
+  };
+  
+  const getTeamById = (teamId) => {
+    return allTeams.find(t => t.id === teamId);
+  };
 
   const handleUpdateRole = async (teamId, newRole) => {
     try {
@@ -38,16 +70,21 @@ export default function EditUserModal({ user, onClose, onSave }) {
   };
 
   const handleRemoveFromTeam = async (teamId) => {
-    if (!confirm(`確定要將此用戶從 ${getTeamInfo(teamId)?.name} 移除嗎？`)) {
+    const teamInfo = getTeamById(teamId);
+    const teamName = teamInfo?.name || teamId;
+    
+    if (!confirm(`確定要將此用戶從 ${teamName} 移除嗎？`)) {
       return;
     }
     
     try {
       setSaving(true);
+      console.log('Removing user from team:', user.id, teamId);
       await onSave(user.id, {
         action: 'remove',
         teamId
       });
+      console.log('Remove completed successfully');
     } catch (error) {
       console.error('Failed to remove from team:', error);
       alert('移除失敗：' + error.message);
@@ -114,11 +151,11 @@ export default function EditUserModal({ user, onClose, onSave }) {
     }
   };
 
-  // 獲取可以添加的團隊（用戶還不在的團隊 + 我有權限的團隊 + 我是 ADMIN/MANAGER）
-  const availableTeamsToAdd = myTeams.filter(teamId => {
-    const myRole = myTeamRoles[teamId];
+  // 獲取可以添加的團隊（存在於 DB 的團隊 + 我有權限 + 用戶還不在）
+  const availableTeamsToAdd = allTeams.filter(team => {
+    const myRole = myTeamRoles[team.id];
     // 只有 ADMIN 或 MANAGER 可以邀請人加入團隊
-    return ['ADMIN', 'MANAGER'].includes(myRole) && !userTeams.includes(teamId);
+    return ['ADMIN', 'MANAGER'].includes(myRole) && !userTeams.includes(team.id);
   });
 
   return (
@@ -250,14 +287,17 @@ export default function EditUserModal({ user, onClose, onSave }) {
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {userTeams.map(teamId => {
-                const teamInfo = getTeamInfo(teamId);
-                const currentRole = userTeamRoles[teamId];
-                const canEdit = canEditUserInTeam(user, teamId);
-                const canRemove = canRemoveUserFromTeam(user, teamId);
-                const myRoleInTeam = getUserRoleInTeam(teamId);
-                
-                if (!teamInfo) return null;
+              {userTeams
+                .filter(teamId => {
+                  // 只顯示存在於 DB 的團隊（過濾孤兒數據）
+                  return getTeamById(teamId) !== undefined;
+                })
+                .map(teamId => {
+                  const teamInfo = getTeamById(teamId);
+                  const currentRole = userTeamRoles[teamId];
+                  const canEdit = canEditUserInTeam(user, teamId);
+                  const canRemove = canRemoveUserFromTeam(user, teamId);
+                  const myRoleInTeam = getUserRoleInTeam(teamId);
                 
                 return (
                   <div 
@@ -378,12 +418,11 @@ export default function EditUserModal({ user, onClose, onSave }) {
                     }}
                   >
                     <option value="">請選擇團隊...</option>
-                    {availableTeamsToAdd.map(teamId => {
-                      const teamInfo = getTeamInfo(teamId);
-                      return teamInfo ? (
-                        <option key={teamId} value={teamId}>{teamInfo.name}</option>
-                      ) : null;
-                    })}
+                    {availableTeamsToAdd.map(team => (
+                      <option key={team.id} value={team.id}>
+                        {team.icon} {team.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 

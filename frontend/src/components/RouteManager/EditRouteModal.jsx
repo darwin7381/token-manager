@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import { updateRoute } from '../../services/api';
 import TagInput from './TagInput';
 
 export default function EditRouteModal({ route, onClose, onSaved }) {
+  const { getToken } = useAuth();
   const [name, setName] = useState(route.name || '');
   const [backendUrl, setBackendUrl] = useState(route.backend_url);
   const [description, setDescription] = useState(route.description || '');
@@ -13,12 +15,13 @@ export default function EditRouteModal({ route, onClose, onSaved }) {
     e.preventDefault();
     setLoading(true);
     try {
+      const token = await getToken();
       await updateRoute(route.id, {
         name,
         backend_url: backendUrl,
         description,
         tags,
-      });
+      }, token);
       onSaved();
     } catch (error) {
       alert('更新失敗: ' + error.message);

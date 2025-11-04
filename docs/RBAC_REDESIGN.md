@@ -1,4 +1,11 @@
-# Token Manager 權限系統設計 - Per-Team Roles 架構
+# ⚠️ 此文檔已過時
+
+> **警告：** 此文檔為設計過程文檔，描述了多次迭代，已不適用。  
+> **請參閱最新文檔：** [`PERMISSION_RULES.md`](PERMISSION_RULES.md)
+
+---
+
+# Token Manager 權限系統設計過程（v2.0-v2.1 迭代記錄）
 
 ## 🎯 核心概念
 

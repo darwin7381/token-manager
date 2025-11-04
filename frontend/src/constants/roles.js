@@ -101,48 +101,13 @@ export const ROLES = {
 };
 
 /**
- * 團隊定義（可以從後端動態獲取，這裡先定義預設值）
+ * 團隊定義
+ * 注意：團隊信息應該從 API 動態獲取（/api/teams）
+ * 這裡只保留 fallback 用途
  */
 export const TEAMS = {
-  ALL: {
-    id: 'all',
-    name: '全部團隊',
-    description: '管理所有團隊的資源（僅 ADMIN 可用）',
-    color: '#8b5cf6',  // 紫色
-    icon: '🌐',
-    isSpecial: true,  // 標記為特殊團隊
-    adminOnly: true  // 僅 ADMIN 可用
-  },
-  PLATFORM: {
-    id: 'platform-team',
-    name: 'Platform Team',
-    description: '平台基礎設施團隊',
-    color: '#8b5cf6'
-  },
-  BACKEND: {
-    id: 'backend-team',
-    name: 'Backend Team',
-    description: '後端開發團隊',
-    color: '#3b82f6'
-  },
-  FRONTEND: {
-    id: 'frontend-team',
-    name: 'Frontend Team',
-    description: '前端開發團隊',
-    color: '#10b981'
-  },
-  DATA: {
-    id: 'data-team',
-    name: 'Data Team',
-    description: '數據工程團隊',
-    color: '#f59e0b'
-  },
-  DEVOPS: {
-    id: 'devops-team',
-    name: 'DevOps Team',
-    description: 'DevOps 團隊',
-    color: '#ef4444'
-  }
+  // 移除硬編碼的團隊
+  // 所有團隊信息從 PostgreSQL API 動態獲取
 };
 
 /**
@@ -181,9 +146,11 @@ export const getRoleInfo = (roleId) => {
 
 /**
  * 獲取團隊的顯示信息
+ * 注意：應該從動態獲取的團隊列表中查找，這只是 fallback
  */
 export const getTeamInfo = (teamId) => {
   return Object.values(TEAMS).find(team => team.id === teamId) || null;
+  // 返回 null 表示團隊不在 constants 中，應該從 API 獲取
 };
 
 /**

@@ -1,6 +1,13 @@
-# Token Manager 權限系統指南
+# ⚠️ 此文檔已過時
 
-本文檔說明 Token Manager 的權限系統架構和使用方式。
+> **警告：** 此文檔描述的是舊版 Global Role 架構，已不適用於當前系統。  
+> **請參閱最新文檔：** [`PERMISSION_RULES.md`](PERMISSION_RULES.md)
+
+---
+
+# Token Manager 權限系統指南（舊版 v1.0-v2.1）
+
+本文檔說明舊版 Token Manager 的權限系統架構（僅供參考）。
 
 ## 🏗️ 架構設計
 

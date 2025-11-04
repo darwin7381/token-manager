@@ -162,14 +162,34 @@ async def add_user_to_team(
     
     # === 2. 檢查當前用戶在該團隊的權限 ===
     my_role_in_team = get_user_role_in_team(current_user, data.team_id)
+    highest_role = get_highest_role(current_user)
     
+    # 如果不是該團隊成員
     if not my_role_in_team:
-        raise HTTPException(
-            status_code=403,
-            detail=f"You are not a member of team: {data.team_id}"
-        )
-    
-    if my_role_in_team not in ["ADMIN", "MANAGER"]:
+        # 檢查是否可以認領空團隊
+        if highest_role == "ADMIN":
+            # 檢查團隊是否為空
+            users_response = clerk_client.users.list(request={"limit": 100})
+            
+            team_members = []
+            for user in users_response:
+                team_roles = (user.public_metadata or {}).get(f"{NAMESPACE}:teamRoles", {})
+                if data.team_id in team_roles:
+                    team_members.append(user.id)
+            
+            if len(team_members) > 0:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"You are not a member of team: {data.team_id}"
+                )
+            # 空團隊，允許認領
+            print(f"✅ Empty team {data.team_id} can be claimed by ADMIN")
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You are not a member of team: {data.team_id}"
+            )
+    elif my_role_in_team not in ["ADMIN", "MANAGER"]:
         raise HTTPException(
             status_code=403,
             detail="Only ADMIN or MANAGER can add team members"
@@ -270,17 +290,31 @@ async def remove_user_from_team(
             )
         
         # === 4. 從團隊移除 ===
-        del team_roles[team_id]
+        # Clerk 的 update_metadata 是 merge 行為
+        # 要刪除 nested key，必須設置為 null
         
-        updated_metadata = target_metadata.copy()
-        updated_metadata[f"{NAMESPACE}:teamRoles"] = team_roles
+        # 獲取完整的現有 metadata
+        current_metadata = dict(target_user.public_metadata or {})
+        current_team_roles = current_metadata.get(f"{NAMESPACE}:teamRoles", {})
+        
+        print(f"🔍 Current teamRoles: {current_team_roles}")
+        
+        # 設置該團隊的角色為 null（表示刪除）
+        update_payload = {
+            f"{NAMESPACE}:teamRoles": {
+                **current_team_roles,
+                team_id: None  # ← 設置為 None 來刪除
+            }
+        }
+        
+        print(f"🔍 Update payload: {update_payload}")
         
         clerk_client.users.update_metadata(
             user_id=user_id,
-            public_metadata=updated_metadata
+            public_metadata=update_payload
         )
         
-        print(f"✅ Removed user {user_id} from team {team_id}")
+        print(f"✅ Removed user {user_id} from team {team_id} (set to null)")
         return {
             "success": True,
             "user_id": user_id,

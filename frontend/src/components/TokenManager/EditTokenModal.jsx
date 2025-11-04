@@ -1,19 +1,28 @@
 import { useState } from 'react';
+import { useAuth } from '@clerk/clerk-react';
 import { updateToken } from '../../services/api';
 import ScopeSelector from './ScopeSelector';
 
-export default function EditTokenModal({ token, onClose, onSaved }) {
+export default function EditTokenModal({ token, teams = [], onClose, onSaved }) {
+  const { getToken } = useAuth();
   const [name, setName] = useState(token.name);
-  const [department, setDepartment] = useState(token.department);
+  const [description, setDescription] = useState(token.description || '');
   const [scopes, setScopes] = useState(token.scopes);
   const [loading, setLoading] = useState(false);
   const [showScopeSelector, setShowScopeSelector] = useState(false);
+
+  const getTeamDisplay = (teamId) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return teamId || '未設定';
+    return `${team.icon} ${team.name} (${team.id})`;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await updateToken(token.id, { name, department, scopes });
+      const authToken = await getToken();
+      await updateToken(token.id, { name, description, scopes }, authToken);
       onSaved();
     } catch (error) {
       alert('更新失敗: ' + error.message);
@@ -42,13 +51,26 @@ export default function EditTokenModal({ token, onClose, onSaved }) {
           </div>
 
           <div className="form-group">
-            <label>部門 *</label>
+            <label>團隊</label>
             <input
               type="text"
-              value={department}
-              onChange={(e) => setDepartment(e.target.value)}
-              required
+              value={getTeamDisplay(token.team_id)}
+              disabled
+              style={{ backgroundColor: '#f5f5f5' }}
             />
+            <small>團隊無法更改</small>
+          </div>
+
+          <div className="form-group">
+            <label>描述或筆記（可選）</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="例如：用於 n8n 自動化工作流程的圖片處理服務"
+              rows="3"
+              maxLength="500"
+            />
+            <small>可以記錄此 Token 的用途、使用場景等資訊</small>
           </div>
 
           <div className="form-group">

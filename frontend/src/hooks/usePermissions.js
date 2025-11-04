@@ -8,6 +8,11 @@ import { NAMESPACE, ROLES } from '../constants/roles';
 export const usePermissions = () => {
   const { user, isLoaded } = useUser();
   
+  // Debug: 檢查 metadata
+  if (user && isLoaded) {
+    console.log('Current user teamRoles:', user.publicMetadata?.['tokenManager:teamRoles']);
+  }
+  
   // ==================== Per-Team Roles Functions ====================
   
   /**
@@ -16,7 +21,9 @@ export const usePermissions = () => {
   const getUserRoleInTeam = (teamId) => {
     if (!user) return null;
     const teamRoles = user.publicMetadata?.[`${NAMESPACE}:teamRoles`] || {};
-    return teamRoles[teamId] || null;
+    const role = teamRoles[teamId];
+    // null 表示已刪除
+    return (role && role !== null) ? role : null;
   };
   
   /**
@@ -25,7 +32,8 @@ export const usePermissions = () => {
   const getUserTeams = () => {
     if (!user) return [];
     const teamRoles = user.publicMetadata?.[`${NAMESPACE}:teamRoles`] || {};
-    return Object.keys(teamRoles);
+    // 過濾掉 null（已刪除的）
+    return Object.keys(teamRoles).filter(teamId => teamRoles[teamId] !== null);
   };
   
   /**
@@ -33,7 +41,15 @@ export const usePermissions = () => {
    */
   const getAllTeamRoles = () => {
     if (!user) return {};
-    return user.publicMetadata?.[`${NAMESPACE}:teamRoles`] || {};
+    const teamRoles = user.publicMetadata?.[`${NAMESPACE}:teamRoles`] || {};
+    // 過濾掉 null（已刪除的）
+    const filtered = {};
+    Object.entries(teamRoles).forEach(([teamId, role]) => {
+      if (role !== null) {
+        filtered[teamId] = role;
+      }
+    });
+    return filtered;
   };
   
   /**

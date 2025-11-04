@@ -1,33 +1,34 @@
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import TokenForm from './TokenForm';
+import CreateTokenModal from './CreateTokenModal';
 import TokenList from './TokenList';
 
 export default function TokenManager() {
   const [refresh, setRefresh] = useState(0);
-  const [showForm, setShowForm] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
         <button 
           className="btn btn-success"
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => setShowCreateModal(true)}
         >
-          <Plus size={18} /> {showForm ? '取消創建' : '創建新 Token'}
+          <Plus size={18} /> 創建新 Token
         </button>
       </div>
       
-      {showForm && (
-        <TokenForm 
-          onTokenCreated={() => {
+      <TokenList key={refresh} onUpdate={() => setRefresh(r => r + 1)} />
+
+      {showCreateModal && (
+        <CreateTokenModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={() => {
             setRefresh(r => r + 1);
-            setShowForm(false);
-          }} 
+            setShowCreateModal(false);
+          }}
         />
       )}
-      
-      <TokenList key={refresh} onUpdate={() => setRefresh(r => r + 1)} />
     </>
   );
 }

@@ -77,13 +77,21 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
           label: '統計分析',
           path: '/stats'
         },
-        // 只有 ADMIN 和 MANAGER 才能看到用戶管理
-        ...(canAccessUserManagement() ? [{
-          id: 'users',
-          icon: Users,
-          label: '用戶管理',
-          path: '/users'
-        }] : []),
+        // 只有 ADMIN 和 MANAGER 才能看到用戶管理和團隊管理
+        ...(canAccessUserManagement() ? [
+          {
+            id: 'users',
+            icon: Users,
+            label: '用戶管理',
+            path: '/users'
+          },
+          {
+            id: 'teams',
+            icon: Users,
+            label: '團隊管理',
+            path: '/teams'
+          }
+        ] : []),
         {
           id: 'cloudflare',
           icon: Globe,

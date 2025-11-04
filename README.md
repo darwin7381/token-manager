@@ -1,9 +1,10 @@
 # API Token 集中管理系統
 
-> **版本**: v1.0  
-> **狀態**: Production Ready
+> **版本**: v3.0 Per-Team Roles  
+> **狀態**: Production Ready  
+> **權限系統文檔**: [`docs/PERMISSION_RULES.md`](docs/PERMISSION_RULES.md)
 
-一套為多微服務架構設計的集中式 API Token 管理系統,解決分散式部署環境下的身份驗證與路由管理問題。
+一套為多微服務架構設計的集中式 API Token 管理系統，採用 Per-Team Roles 權限架構，支持多團隊協作與細粒度權限控制。
 
 ---
 
@@ -11,11 +12,13 @@
 
 - ✅ **Token 管理**: 創建、查看、撤銷 API Token
 - ✅ **路由管理**: 動態新增/修改/刪除微服務路由
-- ✅ **權限控制**: 基於 Scopes 的細粒度權限
+- ✅ **Per-Team Roles**: 每團隊獨立角色系統，完美團隊隔離
+- ✅ **用戶管理**: 完整的用戶與團隊成員管理
+- ✅ **團隊管理**: 創建團隊、管理成員、分配權限
+- ✅ **用戶邀請**: Clerk Invitations，支持 Google Login
 - ✅ **審計日誌**: 記錄所有管理操作
-- ✅ **Web UI**: 友好的管理界面
+- ✅ **Modern UI**: React 18 + Clerk 認證
 - ✅ **全球分佈**: Cloudflare Edge Network 低延遲
-- ✅ **自動部署**: Railway 連接 GitHub 自動部署
 
 ---
 
@@ -401,12 +404,20 @@ MIT License
 
 ---
 
-## 📞 支持
+## 📞 支持與文檔
 
-如有問題請查看:
+### 權限系統
+- 🔐 **[完整權限規則](docs/PERMISSION_RULES.md)** - Per-Team Roles 架構說明
+- 📊 **[權限矩陣](docs/PERMISSION_RULES.md#完整權限矩陣)** - 所有角色的權限對照表
+
+### 開發文檔
 - 📚 [產品需求文檔](docs/PRD.md)
 - 📋 [開發任務清單](docs/TODO.md)
-- 📖 [原始設計草稿](docs/draft.md)
+- 🏗️ [Per-Team Roles 分析](docs/PER_TEAM_ROLES_ANALYSIS.md)
+
+### 舊版文檔（已過時，僅供參考）
+- ~~[PERMISSIONS_GUIDE.md](docs/PERMISSIONS_GUIDE.md)~~ - 已被 PERMISSION_RULES.md 取代
+- ~~[RBAC_REDESIGN.md](docs/RBAC_REDESIGN.md)~~ - 舊架構設計
 
 ---
 

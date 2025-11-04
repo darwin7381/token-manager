@@ -1,16 +1,28 @@
 import { useState, useEffect } from 'react';
 import { List, RefreshCw, Edit, Trash2 } from 'lucide-react';
+import { useUser, useAuth } from '@clerk/clerk-react';
 import { listRoutes, deleteRoute } from '../../services/api';
 import EditRouteModal from './EditRouteModal';
 
 export default function RouteList({ onUpdate }) {
+  const { user } = useUser();
+  const { getToken } = useAuth();
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingRoute, setEditingRoute] = useState(null);
 
+  // 檢查用戶權限
+  const teamRoles = user?.publicMetadata?.['tokenManager:teamRoles'] || {};
+  const globalRole = user?.publicMetadata?.['tokenManager:globalRole'];
+  const coreRole = teamRoles['core-team'];
+  
+  const canEdit = globalRole === 'ADMIN' || (coreRole && ['ADMIN', 'MANAGER'].includes(coreRole));
+  const canDelete = globalRole === 'ADMIN' || (coreRole === 'ADMIN');
+
   const loadRoutes = async () => {
     try {
-      const data = await listRoutes();
+      const token = await getToken();
+      const data = await listRoutes(token);
       setRoutes(data);
     } catch (error) {
       console.error('Failed to load routes:', error);
@@ -27,7 +39,8 @@ export default function RouteList({ onUpdate }) {
     if (!confirm('確定要刪除此路由？')) return;
     
     try {
-      await deleteRoute(id);
+      const token = await getToken();
+      await deleteRoute(id, token);
       loadRoutes();
       if (onUpdate) onUpdate();
     } catch (error) {
@@ -89,18 +102,25 @@ export default function RouteList({ onUpdate }) {
               <td>{route.description || '-'}</td>
               <td>{formatDate(route.created_at)}</td>
               <td>
-                <button
-                  className="btn btn-secondary btn-small"
-                  onClick={() => setEditingRoute(route)}
-                >
-                  <Edit size={14} /> 編輯
-                </button>
-                <button
-                  className="btn btn-danger btn-small"
-                  onClick={() => handleDelete(route.id)}
-                >
-                  <Trash2 size={14} /> 刪除
-                </button>
+                {canEdit && (
+                  <button
+                    className="btn btn-secondary btn-small"
+                    onClick={() => setEditingRoute(route)}
+                  >
+                    <Edit size={14} /> 編輯
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    className="btn btn-danger btn-small"
+                    onClick={() => handleDelete(route.id)}
+                  >
+                    <Trash2 size={14} /> 刪除
+                  </button>
+                )}
+                {!canEdit && !canDelete && (
+                  <span style={{ color: '#999', fontSize: '12px' }}>唯讀</span>
+                )}
               </td>
             </tr>
           ))}

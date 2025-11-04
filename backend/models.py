@@ -9,16 +9,20 @@ from datetime import datetime
 class TokenCreate(BaseModel):
     """創建 Token 請求模型"""
     name: str = Field(..., min_length=1, max_length=255, description="Token 名稱")
-    department: str = Field(..., min_length=1, max_length=100, description="所屬部門")
+    team_id: str = Field(..., min_length=1, max_length=50, description="所屬團隊 ID")
+    description: Optional[str] = Field(default="", max_length=500, description="Token 描述或筆記")
     scopes: List[str] = Field(..., min_items=1, description="權限範圍")
-    expires_days: Optional[int] = Field(default=90, ge=1, le=3650, description="過期天數")
+    expires_days: Optional[int] = Field(default=None, ge=1, le=3650, description="過期天數，null 表示永不過期")
 
 
 class TokenResponse(BaseModel):
     """Token 響應模型(不含明文 token)"""
     id: int
     name: str
-    department: str
+    team_id: Optional[str]
+    created_by: Optional[str]
+    description: Optional[str]
+    token_preview: Optional[str]  # 部分 Token 顯示 (如 ntk_abc...xyz)
     scopes: List[str]
     created_at: datetime
     expires_at: Optional[datetime]
@@ -30,14 +34,14 @@ class TokenCreateResponse(BaseModel):
     id: int
     token: str
     name: str
-    department: str
+    team_id: str
     scopes: List[str]
 
 
 class TokenUpdate(BaseModel):
     """更新 Token 請求模型"""
     name: Optional[str] = Field(None, min_length=1, max_length=255, description="Token 名稱")
-    department: Optional[str] = Field(None, min_length=1, max_length=100, description="所屬部門")
+    description: Optional[str] = Field(None, max_length=500, description="Token 描述或筆記")
     scopes: Optional[List[str]] = Field(None, min_items=1, description="權限範圍")
 
 

@@ -1,22 +1,38 @@
 import { useState, useEffect } from 'react';
-import { List, RefreshCw, Edit, Trash2 } from 'lucide-react';
-import { listTokens, deleteToken } from '../../services/api';
+import { List, RefreshCw, Edit, Trash2, Copy } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
+import { listTokens, deleteToken, fetchTeams, revealToken } from '../../services/api';
 import EditTokenModal from './EditTokenModal';
 
 export default function TokenList({ onUpdate }) {
+  const { getToken } = useAuth();
   const [tokens, setTokens] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingToken, setEditingToken] = useState(null);
+  const [revealedToken, setRevealedToken] = useState(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   const loadTokens = async () => {
     try {
-      const data = await listTokens();
-      setTokens(data);
+      const token = await getToken();
+      const [tokensData, teamsData] = await Promise.all([
+        listTokens(token),
+        fetchTeams(token)
+      ]);
+      setTokens(tokensData);
+      setTeams(teamsData);
     } catch (error) {
       console.error('Failed to load tokens:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getTeamDisplay = (teamId) => {
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return teamId || '未設定';
+    return `${team.icon} ${team.name} (${team.id})`;
   };
 
   useEffect(() => {
@@ -27,12 +43,36 @@ export default function TokenList({ onUpdate }) {
     if (!confirm('確定要撤銷此 Token？此操作無法撤銷。')) return;
     
     try {
-      await deleteToken(id);
+      const token = await getToken();
+      await deleteToken(id, token);
       loadTokens();
       if (onUpdate) onUpdate();
     } catch (error) {
       alert('刪除失敗: ' + error.message);
     }
+  };
+
+  const handleCopyToken = async (tokenId, tokenName) => {
+    // 先打開彈窗（顯示 loading）
+    setRevealedToken({ id: tokenId, name: tokenName, token: null, loading: true });
+    
+    try {
+      const authToken = await getToken();
+      const data = await revealToken(tokenId, authToken);
+      
+      // 更新彈窗狀態（顯示 Token）
+      setRevealedToken({ id: tokenId, name: tokenName, token: data.token, loading: false });
+    } catch (err) {
+      console.error('獲取 Token 失敗:', err);
+      alert('獲取 Token 失敗: ' + err.message);
+      setRevealedToken(null);
+    }
+  };
+
+  const maskToken = (token) => {
+    if (!token || token.length < 20) return token;
+    // 顯示前12個字符 + ... + 後6個字符
+    return `${token.substring(0, 12)}...${token.substring(token.length - 6)}`;
   };
 
   const formatDate = (dateString) => {
@@ -64,7 +104,7 @@ export default function TokenList({ onUpdate }) {
           <tr>
             <th>ID</th>
             <th>名稱</th>
-            <th>部門</th>
+            <th>團隊</th>
             <th>權限</th>
             <th>創建時間</th>
             <th>過期時間</th>
@@ -77,7 +117,7 @@ export default function TokenList({ onUpdate }) {
               <td>{token.id}</td>
               <td><strong>{token.name}</strong></td>
               <td>
-                <span className="badge badge-info">{token.department}</span>
+                <span className="badge badge-info">{getTeamDisplay(token.team_id)}</span>
               </td>
               <td>
                 {token.scopes.map((scope) => (
@@ -99,6 +139,13 @@ export default function TokenList({ onUpdate }) {
               <td>{token.expires_at ? formatDate(token.expires_at) : '永不過期'}</td>
               <td>
                 <button
+                  className="btn btn-small"
+                  onClick={() => handleCopyToken(token.id, token.name)}
+                  title="複製 Token"
+                >
+                  <Copy size={14} /> 複製
+                </button>
+                <button
                   className="btn btn-secondary btn-small"
                   onClick={() => setEditingToken(token)}
                 >
@@ -119,6 +166,7 @@ export default function TokenList({ onUpdate }) {
       {editingToken && (
         <EditTokenModal
           token={editingToken}
+          teams={teams}
           onClose={() => setEditingToken(null)}
           onSaved={() => {
             setEditingToken(null);
@@ -126,6 +174,88 @@ export default function TokenList({ onUpdate }) {
             if (onUpdate) onUpdate();
           }}
         />
+      )}
+
+      {revealedToken && (
+        <div className="modal-overlay" onClick={() => setRevealedToken(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h2>Token: {revealedToken.name}</h2>
+              <button className="modal-close" onClick={() => setRevealedToken(null)}>&times;</button>
+            </div>
+            
+            {revealedToken.loading ? (
+              <div style={{ padding: '40px', textAlign: 'center' }}>
+                <div className="loading">載入中...</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ 
+                  backgroundColor: '#fef3c7', 
+                  border: '2px solid #f59e0b', 
+                  padding: '15px', 
+                  borderRadius: '8px',
+                  marginBottom: '20px'
+                }}>
+                  <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', color: '#92400e' }}>
+                    ⚠️ 點擊複製按鈕將 Token 複製到剪貼簿
+                  </p>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                    <div style={{ 
+                      flex: 1,
+                      backgroundColor: '#1f2937', 
+                      color: '#10b981', 
+                      padding: '12px 15px', 
+                      borderRadius: '6px',
+                      fontFamily: 'monospace',
+                      fontSize: '14px',
+                      wordBreak: 'break-all',
+                      userSelect: 'none',
+                      cursor: 'default'
+                    }}>
+                      {maskToken(revealedToken.token)}
+                    </div>
+                    <button
+                      className="btn btn-success"
+                      onClick={() => {
+                        navigator.clipboard.writeText(revealedToken.token);
+                        setCopySuccess(true);
+                        setTimeout(() => setCopySuccess(false), 2000);
+                      }}
+                      style={{ flexShrink: 0 }}
+                    >
+                      {copySuccess ? '✅ 已複製' : '📋 複製'}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ 
+                  backgroundColor: '#f0f9ff', 
+                  padding: '15px', 
+                  borderRadius: '8px',
+                  marginBottom: '20px',
+                  fontSize: '14px'
+                }}>
+                  <strong>💡 使用方式：</strong>
+                  <ol style={{ margin: '10px 0 0 0', paddingLeft: '20px' }}>
+                    <li>點擊上方「複製」按鈕</li>
+                    <li>在 n8n 中設定 HTTP Request Header: <code>X-API-Key</code></li>
+                    <li>Header 值貼上此 Token</li>
+                  </ol>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn" onClick={() => {
+                    setRevealedToken(null);
+                    setCopySuccess(false);
+                  }}>
+                    完成
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
