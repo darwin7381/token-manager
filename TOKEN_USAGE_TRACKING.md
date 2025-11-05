@@ -384,22 +384,116 @@ LIMIT 10;
 
 ## ✅ 完成狀態
 
-### **已實施**
-- ✅ 後端 API：`POST /api/usage-log`
-- ✅ Worker 異步記錄邏輯
-- ✅ 更新 `last_used` 時間
-- ✅ 錯誤處理和容錯
-- ✅ 環境變數配置
+### **後端實施（100% 完成）**
+- ✅ 數據庫表：`token_usage_logs`（包含詳細欄位）
+- ✅ API：`POST /api/usage-log`（記錄完整資訊）
+- ✅ API：`GET /api/usage/stats`（整體統計）
+- ✅ API：`GET /api/usage/token/{id}`（Token 詳情）
+- ✅ API：`GET /api/usage/route`（路由統計）
+- ✅ API：`GET /api/usage/test-data`（測試用）
 
-### **前端展示（已存在）**
+### **Worker 實施（100% 完成）**
+- ✅ 異步記錄邏輯（使用 `ctx.waitUntil()`）
+- ✅ 記錄詳細資訊（狀態碼、響應時間、IP、User-Agent等）
+- ✅ 環境變數配置（token.blocktempo.ai）
+- ✅ 5 秒超時保護
+- ✅ 錯誤處理（失敗不影響主流程）
+- ✅ 已部署到 Cloudflare
+
+### **前端展示（100% 完成）**
+- ✅ API 使用分析頁面（`/usage-analytics`）
+  - 核心指標：總調用、成功率、平均響應時間、錯誤次數
+  - 24 小時調用趨勢圖（雙軸：調用量 + 響應時間）
+  - Top 10 最活躍 Token
+  - Top 10 最熱門路由
+  - 路由使用分佈餅圖
 - ✅ Token 列表顯示 `last_used`
-- ✅ 格式化時間顯示
+- ⏳ Token 使用詳情頁面（進行中）
+- ⏳ 路由使用詳情頁面（進行中）
+- ⏳ Dashboard 整合使用數據（進行中）
 
-### **未來可選**
-- ⏳ 詳細使用日誌表
-- ⏳ Dashboard 使用統計圖表
-- ⏳ 使用趨勢分析
-- ⏳ 異常檢測
+### **數據表結構**
+```sql
+CREATE TABLE token_usage_logs (
+    id SERIAL PRIMARY KEY,
+    token_hash VARCHAR(64) NOT NULL,        -- Token hash
+    route_path VARCHAR(255),                 -- 調用的路由
+    used_at TIMESTAMP NOT NULL DEFAULT NOW(), -- 使用時間
+    response_status INTEGER,                 -- HTTP 狀態碼
+    response_time_ms INTEGER,                -- 響應時間（毫秒）
+    ip_address VARCHAR(45),                  -- 來源 IP
+    user_agent TEXT,                         -- User Agent
+    request_method VARCHAR(10),              -- HTTP 方法
+    error_message TEXT                       -- 錯誤訊息
+);
+```
+
+**索引優化**：
+- `idx_usage_token_hash`：按 Token 查詢
+- `idx_usage_used_at`：按時間查詢
+- `idx_usage_route`：按路由查詢
+- `idx_usage_composite`：複合查詢優化
+
+---
+
+## 🧪 測試狀況
+
+### **已測試項目**
+- ✅ 後端 API 接收使用記錄
+- ✅ 數據成功寫入 `token_usage_logs` 表
+- ✅ OpenAI API 調用成功（Cloudflare Worker）
+- ✅ Worker 已部署到 Cloudflare
+
+### **待驗證項目**
+- ⏳ Worker 異步記錄是否成功發送到後端
+- ⏳ 使用統計 API 返回真實數據
+- ⏳ 前端頁面顯示使用統計
+- ⏳ 端到端完整流程
+
+### **當前問題**
+⚠️ **Worker 配置的後端 URL 為 `https://token.blocktempo.ai`**
+- 這個域名還未設置（指向 Railway 後端）
+- 所以 Worker 的異步記錄暫時無法成功發送
+- 需要等待域名配置完成
+
+**解決方案**：
+1. **短期**：在 Railway 設置自定義域名 `token.blocktempo.ai`
+2. **或臨時**：使用 Railway 提供的 URL（需重新部署 Worker）
+3. **本地測試**：使用 `wrangler dev` + 本地後端完整測試
+
+---
+
+## 🎯 下一步計劃
+
+### **立即完成（前端頁面）**
+1. ✅ API 使用分析頁面（已完成）
+2. ⏳ Token 使用詳情頁面（進行中）
+3. ⏳ 路由使用詳情頁面（進行中）
+4. ⏳ Dashboard 整合使用數據（進行中）
+
+### **測試與驗證**
+1. ⏳ 本地 Worker 測試（wrangler dev）
+2. ⏳ 模擬使用數據測試前端
+3. ⏳ 配置域名後完整端到端測試
+
+---
+
+## 💡 核心價值
+
+**Token Manager 的真正價值**：
+```
+不只是管理 Token 和路由的 CRUD
+更重要的是監控和分析 API 的實際使用情況！
+```
+
+**使用統計系統提供**：
+- 📊 每個 Token 被調用多少次
+- 📍 每個路由被訪問多少次
+- ⏱️ API 響應時間監控
+- ✅ 成功率和錯誤率追蹤
+- 📈 使用趨勢分析
+- 🔥 熱點識別
+- ⚠️ 異常檢測
 
 ---
 
@@ -411,20 +505,23 @@ LIMIT 10;
 - Worker 驗證 Token 時不經過我們的後端
 - 只有管理操作被記錄
 
-**現在的解決方案：**
-- Worker 在驗證成功後，異步通知後端
-- 後端更新 `last_used` 時間
+**現在的完整解決方案：**
+- Worker 在每次調用後，異步發送詳細資訊到後端
+- 後端記錄到 `token_usage_logs` 表
+- 前端提供多個頁面展示使用統計
 - 不影響性能，不消耗 KV 配額
-- 為未來的使用分析打下基礎
+- 完整的監控和分析能力
 
 **效果：**
-- ✅ 可以看到每個 Token 最後使用時間
-- ✅ 可以識別長時間未使用的 Token
-- ✅ 為未來的詳細分析預留擴展空間
+- ✅ 可以看到每個 Token 的詳細使用記錄
+- ✅ 可以看到每個路由的調用統計
+- ✅ 可以監控 API 性能（響應時間、錯誤率）
+- ✅ 可以分析使用趨勢
+- ✅ 可以識別熱點和異常
 
 ---
 
-**文件版本**: 1.0  
+**文件版本**: 2.0  
 **最後更新**: 2025-11-05  
-**實施狀態**: 完成
+**實施狀態**: 後端完成，前端進行中
 

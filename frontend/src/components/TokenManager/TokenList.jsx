@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { List, RefreshCw, Edit, Trash2, Copy } from 'lucide-react';
+import { List, RefreshCw, Edit, Trash2, Copy, BarChart2 } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
 import { listTokens, deleteToken, fetchTeams, revealToken, listRoutes, listTags } from '../../services/api';
 import EditTokenModal from './EditTokenModal';
 
 export default function TokenList({ onUpdate }) {
   const { getToken } = useAuth();
+  const navigate = useNavigate();
   const [tokens, setTokens] = useState([]);
   const [teams, setTeams] = useState([]);
   const [routes, setRoutes] = useState([]);
@@ -138,7 +140,12 @@ export default function TokenList({ onUpdate }) {
         </thead>
         <tbody>
           {tokens.map((token) => (
-            <tr key={token.id}>
+            <tr 
+              key={token.id} 
+              className="token-row-clickable"
+              onClick={() => navigate(`/token-usage/${token.id}`)}
+              title="點擊查看使用記錄"
+            >
               <td>{token.id}</td>
               <td><strong>{token.name}</strong></td>
               <td>
@@ -169,23 +176,23 @@ export default function TokenList({ onUpdate }) {
               </td>
               <td>{formatDate(token.created_at)}</td>
               <td>{token.expires_at ? formatDate(token.expires_at) : '永不過期'}</td>
-              <td>
+              <td onClick={(e) => e.stopPropagation()}>
                 <button
                   className="btn btn-small"
-                  onClick={() => handleCopyToken(token.id, token.name)}
+                  onClick={(e) => { e.stopPropagation(); handleCopyToken(token.id, token.name); }}
                   title="複製 Token"
                 >
                   <Copy size={14} /> 複製
                 </button>
                 <button
                   className="btn btn-secondary btn-small"
-                  onClick={() => setEditingToken(token)}
+                  onClick={(e) => { e.stopPropagation(); setEditingToken(token); }}
                 >
                   <Edit size={14} /> 編輯
                 </button>
                 <button
                   className="btn btn-danger btn-small"
-                  onClick={() => handleDelete(token.id)}
+                  onClick={(e) => { e.stopPropagation(); handleDelete(token.id); }}
                 >
                   <Trash2 size={14} /> 撤銷
                 </button>

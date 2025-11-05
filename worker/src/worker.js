@@ -216,13 +216,24 @@ export default {
         redirect: 'follow'
       });
       
-      // 11. 返回響應
+      // 11. 發送請求並計時
+      const startTime = Date.now();
       const response = await fetch(backendRequest);
+      const responseTime = Date.now() - startTime;
       
       // 12. 記錄 Token 使用情況（異步，不阻塞響應）
       // 使用 ctx.waitUntil 確保在響應返回後繼續執行
       ctx.waitUntil(
-        logTokenUsage(tokenHash, matchedPath, env)
+        logTokenUsage({
+          tokenHash,
+          routePath: matchedPath,
+          responseStatus: response.status,
+          responseTime,
+          ipAddress: request.headers.get('cf-connecting-ip'),
+          userAgent: request.headers.get('user-agent'),
+          requestMethod: request.method,
+          errorMessage: response.ok ? null : `HTTP ${response.status}`
+        }, env)
       );
       
       return response;
@@ -267,23 +278,31 @@ function jsonResponse(data, status = 200) {
  * 記錄 Token 使用情況到後端
  * 使用異步方式，不阻塞主請求
  */
-async function logTokenUsage(tokenHash, routePath, env) {
+async function logTokenUsage(usageData, env) {
   try {
     // 從環境變數獲取後端 URL
     // 生產環境: https://token.blocktempo.ai
     // 開發環境: http://localhost:8000
     const backendUrl = env.TOKEN_MANAGER_BACKEND || 'https://token.blocktempo.ai';
     
+    const payload = {
+      token_hash: usageData.tokenHash,
+      route: usageData.routePath,
+      timestamp: Date.now(),
+      response_status: usageData.responseStatus,
+      response_time_ms: usageData.responseTime,
+      ip_address: usageData.ipAddress,
+      user_agent: usageData.userAgent,
+      request_method: usageData.requestMethod,
+      error_message: usageData.errorMessage
+    };
+    
     const response = await fetch(`${backendUrl}/api/usage-log`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        token_hash: tokenHash,
-        route: routePath,
-        timestamp: Date.now()
-      }),
+      body: JSON.stringify(payload),
       // 5 秒超時，避免阻塞太久
       signal: AbortSignal.timeout(5000)
     });

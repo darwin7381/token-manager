@@ -50,6 +50,20 @@ body {
   overflow-x: hidden;
 }
 
+/* 可點擊的表格行 */
+.token-row-clickable,
+.route-row-clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.token-row-clickable:hover,
+.route-row-clickable:hover {
+  background: var(--bg-tertiary) !important;
+  transform: scale(1.01);
+  box-shadow: var(--shadow-sm);
+}
+
 /* Dashboard 布局 */
 .dashboard {
   display: flex;

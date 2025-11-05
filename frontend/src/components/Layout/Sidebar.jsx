@@ -51,6 +51,12 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
           path: '/dashboard'
         },
         { 
+          id: 'usage-analytics', 
+          icon: BarChart3, 
+          label: 'API 使用分析',
+          path: '/usage-analytics'
+        },
+        { 
           id: 'system-health', 
           icon: Activity, 
           label: '系統健康監控',

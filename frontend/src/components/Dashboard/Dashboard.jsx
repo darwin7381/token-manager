@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
 import { 
   TrendingUp, 
   Users, 
@@ -18,12 +19,16 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 function Dashboard() {
   const { getToken } = useAuth();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
 
+  const [usageData, setUsageData] = useState(null);
+
   useEffect(() => {
     loadDashboardData();
+    loadUsageData();
   }, []);
 
   const loadDashboardData = async () => {
@@ -49,6 +54,26 @@ function Dashboard() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUsageData = async () => {
+    try {
+      const token = await getToken();
+      
+      const response = await fetch('/api/usage/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setUsageData(result);
+      }
+    } catch (err) {
+      console.error('Error loading usage data:', err);
+      // 不設置錯誤，使用數據是可選的
     }
   };
 
@@ -112,30 +137,101 @@ function Dashboard() {
           title="活躍 Token"
           value={overview.total_tokens}
           color="blue"
-          trend="+12% 本週"
+          trend={usageData ? `${usageData.top_tokens.length} 個在使用中` : '管理中'}
         />
         <StatCard
           icon={<Route size={24} />}
           title="路由總數"
           value={overview.total_routes}
           color="green"
-          trend="穩定"
+          trend={usageData ? `${usageData.top_routes.length} 個有調用` : '已配置'}
         />
         <StatCard
           icon={<Users size={24} />}
           title="團隊數量"
           value={overview.total_teams}
           color="purple"
-          trend="+2 本月"
+          trend="協作中"
         />
         <StatCard
-          icon={<AlertTriangle size={24} />}
-          title="即將過期"
-          value={expiring_soon.length}
-          color="orange"
-          trend="30 天內"
+          icon={<Activity size={24} />}
+          title="API 調用"
+          value={usageData ? usageData.overview.total_calls.toLocaleString() : '0'}
+          color="cyan"
+          trend={usageData ? `${usageData.overview.success_rate.toFixed(1)}% 成功率` : '監控中'}
         />
       </div>
+
+      {/* API 使用統計（如果有數據） */}
+      {usageData && usageData.overview.total_calls > 0 && (
+        <div className="usage-section">
+          <div className="section-header">
+            <h3>
+              <Activity size={20} />
+              API 使用概況
+            </h3>
+            <a href="/usage-analytics" className="view-all-link">
+              查看詳細分析 →
+            </a>
+          </div>
+          <div className="usage-quick-stats">
+            <div className="quick-stat">
+              <span className="quick-stat-label">總調用次數</span>
+              <span className="quick-stat-value">{usageData.overview.total_calls.toLocaleString()}</span>
+            </div>
+            <div className="quick-stat">
+              <span className="quick-stat-label">成功率</span>
+              <span className="quick-stat-value success">{usageData.overview.success_rate.toFixed(1)}%</span>
+            </div>
+            <div className="quick-stat">
+              <span className="quick-stat-label">平均響應時間</span>
+              <span className="quick-stat-value">{usageData.overview.avg_response_time.toFixed(0)}ms</span>
+            </div>
+            <div className="quick-stat">
+              <span className="quick-stat-label">錯誤次數</span>
+              <span className="quick-stat-value error">{usageData.overview.total_errors.toLocaleString()}</span>
+            </div>
+          </div>
+          
+          {/* Top 3 Token 和 Top 3 路由 */}
+          <div className="usage-tops-grid">
+            <div className="usage-top-card">
+              <h4>🔥 最活躍 Token (Top 3)</h4>
+              <div className="top-items">
+                {usageData.top_tokens.slice(0, 3).map((token, index) => (
+                  <div 
+                    key={index} 
+                    className="top-item-compact clickable"
+                    onClick={() => navigate(`/token-usage/${token.id || index + 1}`)}
+                    title={`點擊查看 ${token.name} 的使用詳情`}
+                  >
+                    <span className="top-rank-compact">#{index + 1}</span>
+                    <span className="top-name-compact">{token.name}</span>
+                    <span className="top-count-compact">{token.usage_count} 次</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="usage-top-card">
+              <h4>📍 最熱門路由 (Top 3)</h4>
+              <div className="top-items">
+                {usageData.top_routes.slice(0, 3).map((route, index) => (
+                  <div 
+                    key={index} 
+                    className="top-item-compact clickable"
+                    onClick={() => navigate(`/route-usage?path=${encodeURIComponent(route.route_path)}`)}
+                    title={`點擊查看 ${route.route_name || route.route_path} 的調用統計`}
+                  >
+                    <span className="top-rank-compact">#{index + 1}</span>
+                    <span className="top-name-compact">{route.route_name || route.route_path}</span>
+                    <span className="top-count-compact">{route.call_count} 次</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 圖表區域 */}
       <div className="charts-grid">

@@ -1062,29 +1062,340 @@ async def log_token_usage(request: Request):
         token_hash = data.get('token_hash')
         route_path = data.get('route')
         timestamp = data.get('timestamp')
+        response_status = data.get('response_status')
+        response_time_ms = data.get('response_time_ms')
+        ip_address = data.get('ip_address')
+        user_agent = data.get('user_agent')
+        request_method = data.get('request_method')
+        error_message = data.get('error_message')
         
         if not token_hash:
             raise HTTPException(400, "token_hash is required")
         
-        # 更新 Token 的 last_used 時間
         async with db.pool.acquire() as conn:
+            # 1. 更新 Token 的 last_used 時間
             await conn.execute("""
                 UPDATE tokens 
                 SET last_used = NOW()
                 WHERE token_hash = $1
             """, token_hash)
-        
-        # 可選：記錄詳細使用日誌到單獨的表（未來擴展）
-        # await conn.execute("""
-        #     INSERT INTO token_usage_logs (token_hash, route_path, used_at)
-        #     VALUES ($1, $2, $3)
-        # """, token_hash, route_path, timestamp)
+            
+            # 2. 記錄詳細使用日誌
+            await conn.execute("""
+                INSERT INTO token_usage_logs (
+                    token_hash, route_path, used_at, response_status, 
+                    response_time_ms, ip_address, user_agent, request_method, error_message
+                )
+                VALUES ($1, $2, to_timestamp($3::double precision / 1000), $4, $5, $6, $7, $8, $9)
+            """, token_hash, route_path, timestamp, response_status, 
+                response_time_ms, ip_address, user_agent, request_method, error_message)
         
         return {"status": "logged"}
     except Exception as e:
         # 記錄錯誤但不影響 Worker 的正常運作
         print(f"Warning: Failed to log token usage: {e}")
+        import traceback
+        print(traceback.format_exc())
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/usage/stats")
+async def get_usage_stats(request: Request):
+    """
+    獲取整體使用統計
+    """
+    user = await verify_clerk_token(request)
+    
+    async with db.pool.acquire() as conn:
+        # 1. 總體統計
+        total_calls = await conn.fetchval("SELECT COUNT(*) FROM token_usage_logs")
+        total_errors = await conn.fetchval("SELECT COUNT(*) FROM token_usage_logs WHERE response_status >= 400")
+        avg_response_time = await conn.fetchval("SELECT AVG(response_time_ms) FROM token_usage_logs WHERE response_time_ms IS NOT NULL")
+        
+        # 2. 最近 24 小時的調用趨勢
+        hourly_usage = await conn.fetch("""
+            SELECT 
+                DATE_TRUNC('hour', used_at) as hour,
+                COUNT(*) as call_count,
+                AVG(response_time_ms) as avg_response_time
+            FROM token_usage_logs
+            WHERE used_at >= NOW() - INTERVAL '24 hours'
+            GROUP BY hour
+            ORDER BY hour DESC
+        """)
+        
+        # 3. Top 10 最常使用的 Token
+        top_tokens = await conn.fetch("""
+            SELECT 
+                t.token_hash,
+                t.name,
+                t.team_id,
+                COUNT(ul.id) as usage_count,
+                MAX(ul.used_at) as last_used
+            FROM tokens t
+            LEFT JOIN token_usage_logs ul ON t.token_hash = ul.token_hash
+            WHERE ul.used_at >= NOW() - INTERVAL '7 days'
+            GROUP BY t.token_hash, t.name, t.team_id
+            ORDER BY usage_count DESC
+            LIMIT 10
+        """)
+        
+        # 4. Top 10 最常訪問的路由（JOIN routes 獲取名稱）
+        top_routes = await conn.fetch("""
+            SELECT 
+                ul.route_path,
+                r.name as route_name,
+                r.id as route_id,
+                COUNT(*) as call_count,
+                AVG(ul.response_time_ms) as avg_response_time,
+                COUNT(CASE WHEN ul.response_status >= 400 THEN 1 END) as error_count
+            FROM token_usage_logs ul
+            LEFT JOIN routes r ON ul.route_path = r.path
+            WHERE ul.used_at >= NOW() - INTERVAL '7 days'
+            GROUP BY ul.route_path, r.name, r.id
+            ORDER BY call_count DESC
+            LIMIT 10
+        """)
+    
+    return {
+        "overview": {
+            "total_calls": total_calls,
+            "total_errors": total_errors,
+            "avg_response_time": float(avg_response_time) if avg_response_time else 0,
+            "success_rate": ((total_calls - total_errors) / total_calls * 100) if total_calls > 0 else 0
+        },
+        "hourly_usage": [
+            {
+                "hour": row['hour'].isoformat(),
+                "call_count": row['call_count'],
+                "avg_response_time": float(row['avg_response_time']) if row['avg_response_time'] else 0
+            }
+            for row in hourly_usage
+        ],
+        "top_tokens": [
+            {
+                "name": row['name'],
+                "team_id": row['team_id'],
+                "usage_count": row['usage_count'],
+                "last_used": row['last_used'].isoformat() if row['last_used'] else None
+            }
+            for row in top_tokens
+        ],
+        "top_routes": [
+            {
+                "route_path": row['route_path'],
+                "route_name": row['route_name'] or row['route_path'],
+                "route_id": row['route_id'],
+                "call_count": row['call_count'],
+                "avg_response_time": float(row['avg_response_time']) if row['avg_response_time'] else 0,
+                "error_count": row['error_count'],
+                "success_rate": ((row['call_count'] - row['error_count']) / row['call_count'] * 100) if row['call_count'] > 0 else 0
+            }
+            for row in top_routes
+        ]
+    }
+
+
+@app.get("/api/usage/token/{token_id}")
+async def get_token_usage(token_id: int, request: Request, limit: int = 50):
+    """
+    獲取特定 Token 的使用記錄
+    """
+    user = await verify_clerk_token(request)
+    
+    async with db.pool.acquire() as conn:
+        # 獲取 Token 資訊
+        token = await conn.fetchrow("SELECT * FROM tokens WHERE id = $1", token_id)
+        if not token:
+            raise HTTPException(404, "Token not found")
+        
+        # 檢查權限
+        await check_team_token_permission(user, token['team_id'], "edit")
+        
+        # 獲取使用記錄（JOIN routes 獲取名稱）
+        usage_logs = await conn.fetch("""
+            SELECT 
+                ul.*,
+                r.name as route_name,
+                r.id as route_id
+            FROM token_usage_logs ul
+            LEFT JOIN routes r ON ul.route_path = r.path
+            WHERE ul.token_hash = $1
+            ORDER BY ul.used_at DESC
+            LIMIT $2
+        """, token['token_hash'], limit)
+        
+        # 統計數據
+        stats = await conn.fetchrow("""
+            SELECT 
+                COUNT(*) as total_calls,
+                COUNT(CASE WHEN response_status >= 400 THEN 1 END) as error_count,
+                AVG(response_time_ms) as avg_response_time,
+                MIN(used_at) as first_used,
+                MAX(used_at) as last_used
+            FROM token_usage_logs
+            WHERE token_hash = $1
+        """, token['token_hash'])
+    
+    # 獲取路由分佈（帶名稱）
+    async with db.pool.acquire() as conn:
+        route_distribution = await conn.fetch("""
+            SELECT 
+                r.id as route_id,
+                r.name as route_name,
+                r.path as route_path,
+                COUNT(*) as count
+            FROM token_usage_logs ul
+            LEFT JOIN routes r ON ul.route_path = r.path
+            WHERE ul.token_hash = $1
+            GROUP BY r.id, r.name, r.path
+            ORDER BY count DESC
+        """, token['token_hash'])
+    
+    return {
+        "token": {
+            "id": token['id'],
+            "name": token['name'],
+            "team_id": token['team_id']
+        },
+        "stats": dict(stats) if stats else {},
+        "recent_usage": [dict(log) for log in usage_logs],
+        "route_distribution": [dict(d) for d in route_distribution]
+    }
+
+
+@app.get("/api/usage/route")
+async def get_route_usage(request: Request, route_path: str = None, limit: int = 50):
+    """
+    獲取路由的使用記錄
+    """
+    user = await verify_clerk_token(request)
+    
+    async with db.pool.acquire() as conn:
+        if route_path:
+            # 特定路由的使用記錄（JOIN tokens 獲取名稱）
+            usage_logs = await conn.fetch("""
+                SELECT 
+                    ul.*,
+                    t.name as token_name,
+                    t.id as token_id
+                FROM token_usage_logs ul
+                LEFT JOIN tokens t ON ul.token_hash = t.token_hash
+                WHERE ul.route_path = $1
+                ORDER BY ul.used_at DESC
+                LIMIT $2
+            """, route_path, limit)
+            
+            stats = await conn.fetchrow("""
+                SELECT 
+                    COUNT(*) as total_calls,
+                    COUNT(CASE WHEN response_status >= 400 THEN 1 END) as error_count,
+                    AVG(response_time_ms) as avg_response_time
+                FROM token_usage_logs
+                WHERE route_path = $1
+            """, route_path)
+            
+            # 獲取 Token 分佈（帶名稱）
+            token_distribution = await conn.fetch("""
+                SELECT 
+                    t.id as token_id,
+                    t.name as token_name,
+                    COUNT(*) as count
+                FROM token_usage_logs ul
+                LEFT JOIN tokens t ON ul.token_hash = t.token_hash
+                WHERE ul.route_path = $1
+                GROUP BY t.id, t.name
+                ORDER BY count DESC
+                LIMIT 5
+            """, route_path)
+        else:
+            # 所有路由的統計
+            usage_logs = await conn.fetch("""
+                SELECT 
+                    route_path,
+                    COUNT(*) as call_count,
+                    AVG(response_time_ms) as avg_response_time,
+                    MAX(used_at) as last_used
+                FROM token_usage_logs
+                GROUP BY route_path
+                ORDER BY call_count DESC
+                LIMIT $1
+            """, limit)
+            stats = None
+            token_distribution = None
+    
+    result = {
+        "stats": dict(stats) if stats else None,
+        "usage_logs": [dict(log) for log in usage_logs]
+    }
+    
+    if route_path and token_distribution:
+        result["token_distribution"] = [dict(d) for d in token_distribution]
+    
+    return result
+
+
+@app.get("/api/usage/test-data")
+async def get_test_usage_data():
+    """
+    測試用：查看最近的使用記錄（不需要認證）
+    生產環境應該移除此 endpoint
+    """
+    async with db.pool.acquire() as conn:
+        logs = await conn.fetch("""
+            SELECT token_hash, route_path, request_method, response_status, 
+                   response_time_ms, ip_address, used_at
+            FROM token_usage_logs
+            ORDER BY used_at DESC
+            LIMIT 10
+        """)
+    
+    return {
+        "count": len(logs),
+        "logs": [dict(log) for log in logs]
+    }
+
+
+@app.get("/api/test/get-real-data")
+async def get_real_token_and_routes():
+    """
+    測試用：獲取真實的 Token hash 和路由（不需要認證）
+    用於生成測試數據
+    """
+    async with db.pool.acquire() as conn:
+        tokens = await conn.fetch("""
+            SELECT id, token_hash, name, team_id
+            FROM tokens
+            WHERE is_active = TRUE
+            ORDER BY id
+            LIMIT 10
+        """)
+        
+        routes = await conn.fetch("""
+            SELECT id, path, name
+            FROM routes
+            ORDER BY id
+        """)
+    
+    return {
+        "tokens": [
+            {
+                "id": t['id'],
+                "hash": t['token_hash'],
+                "name": t['name'],
+                "team_id": t['team_id']
+            }
+            for t in tokens
+        ],
+        "routes": [
+            {
+                "id": r['id'],
+                "path": r['path'],
+                "name": r['name']
+            }
+            for r in routes
+        ]
+    }
 
 
 @app.get("/")

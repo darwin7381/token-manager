@@ -196,6 +196,41 @@ class Database:
                 """)
                 print("✅ Backend authentication support added to routes")
             
+            # Token 使用記錄表（詳細記錄每次調用）
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS token_usage_logs (
+                    id SERIAL PRIMARY KEY,
+                    token_hash VARCHAR(64) NOT NULL,
+                    route_path VARCHAR(255),
+                    used_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                    response_status INTEGER,
+                    response_time_ms INTEGER,
+                    ip_address VARCHAR(45),
+                    user_agent TEXT,
+                    request_method VARCHAR(10),
+                    error_message TEXT
+                )
+            """)
+            
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_token_hash 
+                ON token_usage_logs(token_hash)
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_used_at 
+                ON token_usage_logs(used_at DESC)
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_route 
+                ON token_usage_logs(route_path)
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_usage_composite
+                ON token_usage_logs(token_hash, used_at DESC)
+            """)
+            
+            print("✅ Token usage logs table initialized")
+            
             # Audit Logs 表
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS audit_logs (

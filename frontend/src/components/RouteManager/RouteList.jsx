@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { List, RefreshCw, Edit, Trash2, Copy, Check, Lock, Unlock } from 'lucide-react';
+import { List, RefreshCw, Edit, Trash2, Copy, Check, Lock, Unlock, BarChart2 } from 'lucide-react';
 import { useUser, useAuth } from '@clerk/clerk-react';
+import { useNavigate } from 'react-router-dom';
 import { listRoutes, deleteRoute, listTokens, revealToken } from '../../services/api';
 import EditRouteModal from './EditRouteModal';
 
 export default function RouteList({ onUpdate }) {
   const { user } = useUser();
   const { getToken } = useAuth();
+  const navigate = useNavigate();
   const [routes, setRoutes] = useState([]);
   const [filteredRoutes, setFilteredRoutes] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -208,7 +210,12 @@ export default function RouteList({ onUpdate }) {
         </thead>
         <tbody>
           {filteredRoutes.map((route) => (
-            <tr key={route.id}>
+            <tr 
+              key={route.id}
+              className="route-row-clickable"
+              onClick={() => navigate(`/route-usage?path=${encodeURIComponent(route.path)}`)}
+              title="點擊查看調用統計"
+            >
               <td>{route.id}</td>
               <td>
                 <strong style={{ fontSize: '14px' }}>{route.name || '-'}</strong>
@@ -321,11 +328,12 @@ export default function RouteList({ onUpdate }) {
                 {route.description || '-'}
               </td>
               <td style={{ fontSize: '12px' }}>{formatDate(route.created_at)}</td>
-              <td>
+              <td onClick={(e) => e.stopPropagation()}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <button
                     className="btn btn-small"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       const curl = `curl -X POST https://api-gateway.cryptoxlab.workers.dev${route.path} -H "X-API-Key: ntk_YOUR_TOKEN" -H "Content-Type: application/json" -d '{}'`;
                       navigator.clipboard.writeText(curl);
                       setCopiedCurl(route.id);
@@ -344,7 +352,7 @@ export default function RouteList({ onUpdate }) {
                     {canEdit && (
                       <button
                         className="btn btn-secondary btn-small"
-                        onClick={() => setEditingRoute(route)}
+                        onClick={(e) => { e.stopPropagation(); setEditingRoute(route); }}
                       >
                         <Edit size={14} /> 編輯
                       </button>
@@ -352,7 +360,7 @@ export default function RouteList({ onUpdate }) {
                     {canDelete && (
                       <button
                         className="btn btn-danger btn-small"
-                        onClick={() => handleDelete(route.id)}
+                        onClick={(e) => { e.stopPropagation(); handleDelete(route.id); }}
                       >
                         <Trash2 size={14} /> 刪除
                       </button>
