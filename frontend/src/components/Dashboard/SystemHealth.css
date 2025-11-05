@@ -1,0 +1,302 @@
+.system-health-container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.health-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.health-header h1 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 整體狀態卡片 */
+.overall-status {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: var(--shadow-md);
+  border-left: 6px solid;
+}
+
+.overall-status.status-healthy {
+  border-color: var(--accent-success);
+}
+
+.overall-status.status-warning {
+  border-color: var(--accent-warning);
+}
+
+.overall-status.status-unhealthy {
+  border-color: var(--accent-danger);
+}
+
+.overall-status-content {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.overall-status-icon {
+  flex-shrink: 0;
+}
+
+.overall-status-icon .status-icon {
+  width: 64px;
+  height: 64px;
+}
+
+.overall-status-info h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.overall-status-text {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.overall-status-details {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.last-checked {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+/* 服務卡片網格 */
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.service-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+  border-left: 4px solid;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.service-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.service-card.service-healthy {
+  border-color: var(--accent-success);
+}
+
+.service-card.service-warning {
+  border-color: var(--accent-warning);
+}
+
+.service-card.service-unhealthy {
+  border-color: var(--accent-danger);
+}
+
+.service-card.service-skipped {
+  border-color: var(--text-tertiary);
+}
+
+.service-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.service-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+
+.service-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.service-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.service-status-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.service-message {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* 狀態圖標 */
+.status-icon {
+  flex-shrink: 0;
+}
+
+.status-healthy {
+  color: var(--accent-success);
+}
+
+.status-warning {
+  color: var(--accent-warning);
+}
+
+.status-unhealthy {
+  color: var(--accent-danger);
+}
+
+.status-skipped {
+  color: var(--text-tertiary);
+}
+
+.status-unknown {
+  color: var(--text-secondary);
+}
+
+/* 系統資訊 */
+.system-info {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.system-info h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.info-label {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+/* 載入和錯誤狀態 */
+.loading-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.loading-state p,
+.error-state p {
+  margin-top: 1rem;
+  font-size: 1rem;
+  color: var(--text-secondary);
+}
+
+.error-state h3 {
+  color: var(--accent-danger);
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.error-state .btn-primary {
+  margin-top: 1.5rem;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+  .system-health-container {
+    padding: 1rem;
+  }
+
+  .health-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .overall-status-content {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .services-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 動畫 */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

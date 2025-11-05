@@ -219,9 +219,11 @@ export default {
       // 11. 返回響應
       const response = await fetch(backendRequest);
       
-      // 12. (可選) 記錄使用情況
-      // 注意: KV 寫入有配額,生產環境建議用 Durable Objects 或外部日誌服務
-      // 這裡我們暫時跳過,避免配額消耗
+      // 12. 記錄 Token 使用情況（異步，不阻塞響應）
+      // 使用 ctx.waitUntil 確保在響應返回後繼續執行
+      ctx.waitUntil(
+        logTokenUsage(tokenHash, matchedPath, env)
+      );
       
       return response;
       
@@ -259,5 +261,39 @@ function jsonResponse(data, status = 200) {
       'Access-Control-Allow-Headers': '*',
     }
   });
+}
+
+/**
+ * 記錄 Token 使用情況到後端
+ * 使用異步方式，不阻塞主請求
+ */
+async function logTokenUsage(tokenHash, routePath, env) {
+  try {
+    // 從環境變數獲取後端 URL
+    // 生產環境: https://token.blocktempo.ai
+    // 開發環境: http://localhost:8000
+    const backendUrl = env.TOKEN_MANAGER_BACKEND || 'https://token.blocktempo.ai';
+    
+    const response = await fetch(`${backendUrl}/api/usage-log`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        token_hash: tokenHash,
+        route: routePath,
+        timestamp: Date.now()
+      }),
+      // 5 秒超時，避免阻塞太久
+      signal: AbortSignal.timeout(5000)
+    });
+    
+    if (!response.ok) {
+      console.error('Usage log failed:', response.status, await response.text());
+    }
+  } catch (error) {
+    // 記錄失敗不影響主流程
+    console.error('Failed to log token usage:', error.message);
+  }
 }
 

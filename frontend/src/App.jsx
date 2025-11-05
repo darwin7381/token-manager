@@ -7,6 +7,9 @@ import RouteManager from './components/RouteManager/RouteManager';
 import Stats from './components/Stats/Stats';
 import UserManagement from './components/UserManagement/UserManagement';
 import TeamManagement from './components/TeamManagement/TeamManagement';
+import Dashboard from './components/Dashboard/Dashboard';
+import AuditLogs from './components/Dashboard/AuditLogs';
+import SystemHealth from './components/Dashboard/SystemHealth';
 import SignIn from './components/Auth/SignIn';
 import SignUp from './components/Auth/SignUp';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -27,8 +30,13 @@ function App() {
             </ProtectedRoute>
           }
         >
-          {/* 預設重導向到統計頁面 */}
-          <Route index element={<Navigate to="/stats" replace />} />
+          {/* 預設重導向到 Dashboard */}
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          
+          {/* Dashboard 和監控 */}
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="audit-logs" element={<AuditLogs />} />
+          <Route path="system-health" element={<SystemHealth />} />
           
           {/* 各個功能頁面 */}
           <Route path="stats" element={<Stats />} />

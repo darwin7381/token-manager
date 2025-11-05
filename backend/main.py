@@ -806,16 +806,285 @@ async def get_stats():
     )
 
 
+@app.get("/api/dashboard/overview")
+async def get_dashboard_overview(request: Request):
+    """
+    獲取 Dashboard 概覽數據
+    包含：總數統計、團隊分佈、時間趨勢
+    """
+    user = await verify_clerk_token(request)
+    
+    async with db.pool.acquire() as conn:
+        # 1. 基礎統計
+        total_tokens = await conn.fetchval(
+            "SELECT COUNT(*) FROM tokens WHERE is_active = TRUE"
+        )
+        total_routes = await conn.fetchval("SELECT COUNT(*) FROM routes")
+        total_teams = await conn.fetchval("SELECT COUNT(*) FROM teams")
+        
+        # 2. 按團隊分組的 Token 統計
+        tokens_by_team = await conn.fetch("""
+            SELECT team_id, COUNT(*) as count
+            FROM tokens
+            WHERE is_active = TRUE AND team_id IS NOT NULL
+            GROUP BY team_id
+            ORDER BY count DESC
+        """)
+        
+        # 3. 最近 7 天的 Token 創建趨勢
+        token_trend = await conn.fetch("""
+            SELECT 
+                DATE(created_at) as date,
+                COUNT(*) as count
+            FROM tokens
+            WHERE created_at >= NOW() - INTERVAL '7 days'
+            GROUP BY DATE(created_at)
+            ORDER BY date DESC
+        """)
+        
+        # 4. 最近 10 條審計日誌
+        recent_logs = await conn.fetch("""
+            SELECT action, entity_type, entity_id, details, created_at
+            FROM audit_logs
+            ORDER BY created_at DESC
+            LIMIT 10
+        """)
+        
+        # 5. 即將過期的 Token（30 天內）
+        expiring_soon = await conn.fetch("""
+            SELECT id, name, team_id, expires_at
+            FROM tokens
+            WHERE is_active = TRUE 
+                AND expires_at IS NOT NULL
+                AND expires_at <= NOW() + INTERVAL '30 days'
+                AND expires_at > NOW()
+            ORDER BY expires_at ASC
+            LIMIT 5
+        """)
+    
+    # 獲取團隊名稱映射
+    async with db.pool.acquire() as conn:
+        teams_data = await conn.fetch("SELECT id, name FROM teams")
+        team_names = {team['id']: team['name'] for team in teams_data}
+    
+    # 處理團隊統計（添加團隊名稱）
+    tokens_by_team_with_names = [
+        {
+            "team_id": row['team_id'],
+            "team_name": team_names.get(row['team_id'], row['team_id']),
+            "count": row['count']
+        }
+        for row in tokens_by_team
+    ]
+    
+    return {
+        "overview": {
+            "total_tokens": total_tokens,
+            "total_routes": total_routes,
+            "total_teams": total_teams,
+        },
+        "tokens_by_team": tokens_by_team_with_names,
+        "token_trend": [
+            {
+                "date": row['date'].isoformat(),
+                "count": row['count']
+            }
+            for row in token_trend
+        ],
+        "recent_logs": [dict(log) for log in recent_logs],
+        "expiring_soon": [
+            {
+                "id": row['id'],
+                "name": row['name'],
+                "team_id": row['team_id'],
+                "team_name": team_names.get(row['team_id'], row['team_id']),
+                "expires_at": row['expires_at'].isoformat()
+            }
+            for row in expiring_soon
+        ]
+    }
+
+
+@app.get("/api/dashboard/audit-logs")
+async def get_audit_logs(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    action: str = None,
+    entity_type: str = None
+):
+    """
+    獲取審計日誌（帶分頁和篩選）
+    """
+    user = await verify_clerk_token(request)
+    
+    # 構建查詢條件
+    conditions = []
+    params = []
+    param_count = 1
+    
+    if action:
+        conditions.append(f"action = ${param_count}")
+        params.append(action)
+        param_count += 1
+    
+    if entity_type:
+        conditions.append(f"entity_type = ${param_count}")
+        params.append(entity_type)
+        param_count += 1
+    
+    where_clause = ""
+    if conditions:
+        where_clause = "WHERE " + " AND ".join(conditions)
+    
+    async with db.pool.acquire() as conn:
+        # 獲取總數
+        count_query = f"SELECT COUNT(*) FROM audit_logs {where_clause}"
+        total = await conn.fetchval(count_query, *params)
+        
+        # 獲取數據
+        params.extend([limit, offset])
+        data_query = f"""
+            SELECT id, action, entity_type, entity_id, details, created_at
+            FROM audit_logs
+            {where_clause}
+            ORDER BY created_at DESC
+            LIMIT ${param_count} OFFSET ${param_count + 1}
+        """
+        logs = await conn.fetch(data_query, *params)
+    
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "data": [dict(log) for log in logs]
+    }
+
+
 # ==================== 健康檢查 ====================
 
 @app.get("/health")
 async def health():
-    """健康檢查端點"""
+    """
+    健康檢查端點（簡易版）
+    用於 k8s liveness probe 等場景
+    """
     return {
         "status": "healthy",
         "service": "token-manager",
         "version": "1.0.0"
     }
+
+
+@app.get("/health/detailed")
+async def health_detailed():
+    """
+    詳細健康檢查
+    檢查數據庫連接、Cloudflare KV 連接等
+    """
+    health_status = {
+        "status": "healthy",
+        "service": "token-manager",
+        "version": "1.0.0",
+        "timestamp": datetime.utcnow().isoformat(),
+        "checks": {}
+    }
+    
+    # 1. 檢查數據庫連接
+    try:
+        async with db.pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+        health_status["checks"]["database"] = {
+            "status": "healthy",
+            "message": "Database connection successful"
+        }
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["checks"]["database"] = {
+            "status": "unhealthy",
+            "message": f"Database connection failed: {str(e)}"
+        }
+    
+    # 2. 檢查 Cloudflare KV（如果已配置）
+    try:
+        cf_kv = get_cf_kv()
+        if not cf_kv.is_dummy:
+            # 嘗試讀取一個測試 key
+            import httpx
+            url = f"{cf_kv.base_url}/values/health-check"
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    url,
+                    headers=cf_kv.headers,
+                    timeout=5.0
+                )
+            health_status["checks"]["cloudflare_kv"] = {
+                "status": "healthy",
+                "message": "Cloudflare KV connection successful"
+            }
+        else:
+            health_status["checks"]["cloudflare_kv"] = {
+                "status": "skipped",
+                "message": "Using dummy credentials (development mode)"
+            }
+    except Exception as e:
+        health_status["checks"]["cloudflare_kv"] = {
+            "status": "warning",
+            "message": f"Cloudflare KV check failed: {str(e)}"
+        }
+    
+    # 3. 檢查 Clerk 連接
+    try:
+        from clerk_auth import clerk_client
+        # 嘗試獲取用戶計數（limit 1 不會消耗太多資源）
+        users_response = clerk_client.users.list(request={"limit": 1})
+        health_status["checks"]["clerk"] = {
+            "status": "healthy",
+            "message": "Clerk API connection successful"
+        }
+    except Exception as e:
+        health_status["checks"]["clerk"] = {
+            "status": "warning",
+            "message": f"Clerk API check failed: {str(e)}"
+        }
+    
+    return health_status
+
+
+@app.post("/api/usage-log")
+async def log_token_usage(request: Request):
+    """
+    記錄 Token 使用情況（由 Cloudflare Worker 調用）
+    不需要認證，因為是內部調用
+    """
+    try:
+        data = await request.json()
+        token_hash = data.get('token_hash')
+        route_path = data.get('route')
+        timestamp = data.get('timestamp')
+        
+        if not token_hash:
+            raise HTTPException(400, "token_hash is required")
+        
+        # 更新 Token 的 last_used 時間
+        async with db.pool.acquire() as conn:
+            await conn.execute("""
+                UPDATE tokens 
+                SET last_used = NOW()
+                WHERE token_hash = $1
+            """, token_hash)
+        
+        # 可選：記錄詳細使用日誌到單獨的表（未來擴展）
+        # await conn.execute("""
+        #     INSERT INTO token_usage_logs (token_hash, route_path, used_at)
+        #     VALUES ($1, $2, $3)
+        # """, token_hash, route_path, timestamp)
+        
+        return {"status": "logged"}
+    except Exception as e:
+        # 記錄錯誤但不影響 Worker 的正常運作
+        print(f"Warning: Failed to log token usage: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 @app.get("/")

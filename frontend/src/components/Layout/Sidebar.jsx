@@ -12,7 +12,9 @@ import {
   Database,
   Globe,
   FileText,
-  Users
+  Users,
+  Activity,
+  FileSearch
 } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 
@@ -40,13 +42,25 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
 
   const menuSections = [
     {
-      title: 'NAVIGATION',
+      title: 'Dashboard',
       items: [
         { 
-          id: 'stats', 
+          id: 'dashboard', 
           icon: LayoutDashboard, 
-          label: '儀表板',
-          path: '/stats'
+          label: '總覽 Dashboard',
+          path: '/dashboard'
+        },
+        { 
+          id: 'system-health', 
+          icon: Activity, 
+          label: '系統健康監控',
+          path: '/system-health'
+        },
+        { 
+          id: 'audit-logs', 
+          icon: FileSearch, 
+          label: '審計日誌',
+          path: '/audit-logs'
         },
       ]
     },
@@ -69,10 +83,10 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
       ]
     },
     {
-      title: '系統',
+      title: '系統管理',
       items: [
         { 
-          id: 'stats-alt', 
+          id: 'stats', 
           icon: BarChart3, 
           label: '統計分析',
           path: '/stats'
@@ -92,24 +106,6 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
             path: '/teams'
           }
         ] : []),
-        {
-          id: 'cloudflare',
-          icon: Globe,
-          label: 'Cloudflare',
-          subItems: [
-            { id: 'kv', icon: Database, label: 'KV Storage' },
-            { id: 'worker', icon: Shield, label: 'Worker' },
-          ]
-        },
-        {
-          id: 'docs',
-          icon: FileText,
-          label: '文檔',
-          subItems: [
-            { id: 'api-docs', label: 'API 文檔', external: 'http://localhost:8000/docs' },
-            { id: 'readme', label: 'README' },
-          ]
-        },
         { 
           id: 'settings', 
           icon: Settings, 
