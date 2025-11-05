@@ -12,6 +12,8 @@ export default function RouteForm({ onRouteCreated }) {
   const [backendUrl, setBackendUrl] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState([]);
+  const [backendAuthType, setBackendAuthType] = useState('none');
+  const [authConfig, setAuthConfig] = useState({});
   const [loading, setLoading] = useState(false);
 
   // 檢查用戶是否有 Core Team 權限
@@ -27,12 +29,35 @@ export default function RouteForm({ onRouteCreated }) {
     setLoading(true);
     try {
       const token = await getToken();
+      
+      // 分離配置和實際密鑰
+      const authSecrets = {};
+      const authConfigToSend = {};
+      
+      if (backendAuthType === 'bearer' && authConfig.token_ref && authConfig.token_value) {
+        authConfigToSend.token_ref = authConfig.token_ref;
+        authSecrets[authConfig.token_ref] = authConfig.token_value;
+      } else if (backendAuthType === 'api-key' && authConfig.key_ref && authConfig.key_value) {
+        authConfigToSend.key_ref = authConfig.key_ref;
+        if (authConfig.header_name) authConfigToSend.header_name = authConfig.header_name;
+        authSecrets[authConfig.key_ref] = authConfig.key_value;
+      } else if (backendAuthType === 'basic' && authConfig.username_ref && authConfig.password_ref &&
+                 authConfig.username_value && authConfig.password_value) {
+        authConfigToSend.username_ref = authConfig.username_ref;
+        authConfigToSend.password_ref = authConfig.password_ref;
+        authSecrets[authConfig.username_ref] = authConfig.username_value;
+        authSecrets[authConfig.password_ref] = authConfig.password_value;
+      }
+      
       await createRoute({
         name,
         path,
         backend_url: backendUrl,
         description,
         tags,
+        backend_auth_type: backendAuthType,
+        backend_auth_config: backendAuthType !== 'none' ? authConfigToSend : null,
+        backend_auth_secrets: Object.keys(authSecrets).length > 0 ? authSecrets : null,
       }, token);
       
       setName('');
@@ -40,6 +65,8 @@ export default function RouteForm({ onRouteCreated }) {
       setBackendUrl('');
       setDescription('');
       setTags([]);
+      setBackendAuthType('none');
+      setAuthConfig({});
       
       if (onRouteCreated) onRouteCreated();
     } catch (error) {
@@ -127,6 +154,139 @@ export default function RouteForm({ onRouteCreated }) {
           <TagInput tags={tags} onChange={setTags} />
           <small>用於權限分組管理，例如: media, premium, internal</small>
         </div>
+
+        <div className="form-group">
+          <label>後端服務認證方式</label>
+          <select value={backendAuthType} onChange={(e) => setBackendAuthType(e.target.value)}>
+            <option value="none">無需認證</option>
+            <option value="bearer">Bearer Token</option>
+            <option value="api-key">API Key</option>
+            <option value="basic">Basic Auth</option>
+          </select>
+          <small>選擇後端微服務需要的認證方式</small>
+        </div>
+
+        {backendAuthType === 'bearer' && (
+          <>
+            <div className="form-group">
+              <label>環境變數名稱（代號）*</label>
+              <input
+                type="text"
+                value={authConfig.token_ref || ''}
+                onChange={(e) => setAuthConfig({...authConfig, token_ref: e.target.value})}
+                placeholder="例如: OPENAI_API_KEY"
+                required
+              />
+              <small>這個名稱會儲存在資料庫中，用於引用實際的 Key</small>
+            </div>
+            
+            <div className="form-group">
+              <label>實際的 API Token *</label>
+              <input
+                type="password"
+                value={authConfig.token_value || ''}
+                onChange={(e) => setAuthConfig({...authConfig, token_value: e.target.value})}
+                placeholder="例如: sk-proj-xxxxxxxxxxxxx"
+                required
+              />
+              <small style={{ color: '#059669' }}>
+                ✅ 這個值會直接儲存到 Cloudflare KV（加密），不會進入資料庫
+              </small>
+            </div>
+          </>
+        )}
+
+        {backendAuthType === 'api-key' && (
+          <>
+            <div className="form-group">
+              <label>Header 名稱（可選）</label>
+              <input
+                type="text"
+                value={authConfig.header_name || ''}
+                onChange={(e) => setAuthConfig({...authConfig, header_name: e.target.value})}
+                placeholder="預設: X-API-Key"
+              />
+              <small>自訂 API Key 的 Header 名稱，留空使用預設值</small>
+            </div>
+            
+            <div className="form-group">
+              <label>環境變數名稱（代號）*</label>
+              <input
+                type="text"
+                value={authConfig.key_ref || ''}
+                onChange={(e) => setAuthConfig({...authConfig, key_ref: e.target.value})}
+                placeholder="例如: BACKEND_API_KEY"
+                required
+              />
+              <small>這個名稱會儲存在資料庫中</small>
+            </div>
+            
+            <div className="form-group">
+              <label>實際的 API Key *</label>
+              <input
+                type="password"
+                value={authConfig.key_value || ''}
+                onChange={(e) => setAuthConfig({...authConfig, key_value: e.target.value})}
+                placeholder="實際的 API Key"
+                required
+              />
+              <small style={{ color: '#059669' }}>
+                ✅ 這個值會直接儲存到 Cloudflare KV（加密），不會進入資料庫
+              </small>
+            </div>
+          </>
+        )}
+
+        {backendAuthType === 'basic' && (
+          <>
+            <div className="form-group">
+              <label>Username 環境變數名稱 *</label>
+              <input
+                type="text"
+                value={authConfig.username_ref || ''}
+                onChange={(e) => setAuthConfig({...authConfig, username_ref: e.target.value})}
+                placeholder="例如: SERVICE_USERNAME"
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>實際的 Username *</label>
+              <input
+                type="text"
+                value={authConfig.username_value || ''}
+                onChange={(e) => setAuthConfig({...authConfig, username_value: e.target.value})}
+                placeholder="實際的用戶名"
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>Password 環境變數名稱 *</label>
+              <input
+                type="text"
+                value={authConfig.password_ref || ''}
+                onChange={(e) => setAuthConfig({...authConfig, password_ref: e.target.value})}
+                placeholder="例如: SERVICE_PASSWORD"
+                required
+              />
+            </div>
+            
+            <div className="form-group">
+              <label>實際的 Password *</label>
+              <input
+                type="password"
+                value={authConfig.password_value || ''}
+                onChange={(e) => setAuthConfig({...authConfig, password_value: e.target.value})}
+                placeholder="實際的密碼"
+                required
+              />
+              <small style={{ color: '#059669' }}>
+                ✅ 這些值會直接儲存到 Cloudflare KV（加密），不會進入資料庫
+              </small>
+            </div>
+          </>
+        )}
 
         <button type="submit" className="btn" disabled={loading}>
           {loading ? '新增中...' : '新增路由'}

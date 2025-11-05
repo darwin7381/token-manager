@@ -90,6 +90,29 @@ class CloudflareKV:
             if response.status_code not in [200, 201]:
                 raise Exception(f"Failed to sync routes to Cloudflare KV: {response.text}")
 
+    async def put_secret(self, secret_name: str, secret_value: str):
+        """
+        將實際的密鑰儲存到 KV (作為加密環境變數)
+        Key: secret:{name}
+        Value: {encrypted_value}
+        """
+        if self.is_dummy:
+            print(f"🔸 [DUMMY] Would store secret {secret_name} to KV")
+            return
+        
+        url = f"{self.base_url}/values/secret:{secret_name}"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.put(
+                url,
+                headers=self.headers,
+                json={"value": secret_value},  # Cloudflare KV 會加密儲存
+                timeout=30.0
+            )
+            
+            if response.status_code not in [200, 201]:
+                raise Exception(f"Failed to store secret to Cloudflare KV: {response.text}")
+
 
 # 全局 Cloudflare KV 實例 (懶加載)
 cf_kv = None

@@ -52,6 +52,9 @@ class RouteCreate(BaseModel):
     backend_url: str = Field(..., min_length=1, description="後端 URL")
     description: Optional[str] = Field(default="", description="描述")
     tags: Optional[List[str]] = Field(default=[], description="標籤/分類")
+    backend_auth_type: Optional[str] = Field(default="none", description="後端認證類型: none, bearer, api-key, basic")
+    backend_auth_config: Optional[dict] = Field(default=None, description="後端認證配置（包含環境變數名稱）")
+    backend_auth_secrets: Optional[dict] = Field(default=None, description="實際的密鑰（不會儲存到資料庫）")
 
 
 class RouteUpdate(BaseModel):
@@ -60,6 +63,9 @@ class RouteUpdate(BaseModel):
     backend_url: Optional[str] = Field(None, min_length=1, description="後端 URL")
     description: Optional[str] = Field(None, description="描述")
     tags: Optional[List[str]] = Field(None, description="標籤/分類")
+    backend_auth_type: Optional[str] = Field(None, description="後端認證類型")
+    backend_auth_config: Optional[dict] = Field(None, description="後端認證配置")
+    backend_auth_secrets: Optional[dict] = Field(None, description="實際的密鑰（不會儲存到資料庫）")
 
 
 class RouteResponse(BaseModel):
@@ -70,6 +76,8 @@ class RouteResponse(BaseModel):
     backend_url: str
     description: Optional[str]
     tags: List[str]
+    backend_auth_type: Optional[str]
+    backend_auth_config: Optional[dict]
     created_at: datetime
 
 

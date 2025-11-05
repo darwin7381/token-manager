@@ -1,7 +1,7 @@
 # 下一階段開發建議
 
 **日期**: 2025-11-03  
-**當前狀態**: Token 管理已整合團隊系統  
+**當前狀態**: Token 和路由管理已整合 Core Team 系統  
 **優先級評估**: 基於系統完整性和用戶價值
 
 ---
@@ -11,211 +11,210 @@
 ### ✅ 已完成
 - [x] 團隊管理（CRUD + 成員管理）
 - [x] 用戶管理（邀請 + 角色分配）
-- [x] Token 管理（整合團隊 + 權限控制）
-- [x] 基礎 RBAC 權限系統
+- [x] Token 管理（整合團隊 + 權限控制 + 加密儲存 + 事後複製）
+- [x] 路由管理（Core Team 權限控制 + 搜尋排序）
+- [x] Core Team 自動創建
+- [x] 基於團隊的 RBAC 權限系統
+- [x] **路由的後端微服務認證**（Bearer/API-Key/Basic Auth）
+- [x] **Cloudflare Worker 整合** - 已部署並測試成功
+- [x] **端到端測試** - OpenAI + CloudConvert 測試通過
+- [x] **UI 優化** - 搜尋、排序、複製功能
 
-### ⏳ 待整合
-- [ ] **路由管理**（整合團隊系統）← 主線功能
-- [ ] **統計分析**（Dashboard）
-- [ ] Cloudflare Worker 整合
-- [ ] 文檔系統
-
----
-
-## 🎯 下一步建議：路由管理整合團隊系統
-
-### **為什麼選擇路由管理？**
-
-1. **完成主線功能閉環**
-   ```
-   Token 管理 ← 已完成
-      ↓ (使用)
-   路由管理 ← 【下一步】
-      ↓ (配置)
-   Cloudflare Worker ← 未來
-   ```
-
-2. **邏輯一致性**
-   - Token 已經整合團隊系統
-   - 路由也需要同樣的整合
-   - 保持系統架構的統一性
-
-3. **用戶體驗完整性**
-   - 用戶創建 Token 後需要配置路由
-   - 路由是 Token scopes 的基礎
-   - 沒有路由，Token 無法發揮作用
+### ⏳ 可選功能（非必需）
+- [ ] **統計分析 Dashboard**
+- [ ] Token 使用追蹤
+- [ ] 審計日誌查詢介面
+- [ ] 文檔系統完善
 
 ---
 
-## 📋 路由管理整合方案
+## 🎯 下一步建議：路由的後端微服務認證
 
-### **方案 A：路由全局共享（推薦）**
+### **為什麼選擇這個功能？**
+
+1. **完成核心功能閉環**
+   ```
+   n8n Workflow
+      ↓ (使用我們的 Token)
+   Cloudflare Worker
+      ↓ (需要後端認證) ← 【下一步】
+   後端微服務 (OpenAI, AWS, 自建服務等)
+      ↓
+   返回結果
+   ```
+
+2. **實際使用需求**
+   - 很多後端微服務需要自己的 API Key
+   - 例如：OpenAI 需要 `OPENAI_API_KEY`
+   - 我們的 Router 需要代為傳遞這些認證
+
+3. **安全價值**
+   - 隱藏真正的微服務 API Key
+   - n8n 只需要我們的 Token
+   - 真正的 API Key 存在 Cloudflare Secrets
+
+---
+
+## 📋 路由管理當前狀態（已實施 Core Team 方案）
+
+### **✅ 已實施：方案 C - Core Team**
 
 ```yaml
 設計理念:
   - 路由是基礎設施，全局可見
-  - 但只有特定角色可以管理
-  - 創建時記錄創建者團隊
+  - 由專門的 Core Team 管理
+  - Core Team 自動創建
 
-數據模型:
-  routes:
-    - id
-    - name, path, backend_url
-    - tags[]
-    - created_by_team (可選，用於追蹤)
-    - created_by_user
-    - created_at
-
-權限規則:
-  創建路由: 全局 ADMIN only
-  查看路由: 所有人可見
-  編輯路由: 全局 ADMIN only
-  刪除路由: 全局 ADMIN only
-
-優點:
-  ✅ 簡單明確
-  ✅ 避免路由碎片化
-  ✅ 集中管理，易於維護
-  ✅ 符合基礎設施的定位
-
-缺點:
-  ❌ 靈活性較低
-  ❌ 團隊無法自主管理路由
-```
-
----
-
-### **方案 B：路由團隊擁有（備選）**
-
-```yaml
-設計理念:
-  - 路由屬於創建它的團隊
-  - 團隊可以管理自己的路由
-  - 其他團隊只能查看
-
-數據模型:
-  routes:
-    - id
-    - name, path, backend_url
-    - tags[]
-    - team_id (必填)
-    - created_by_user
-    - created_at
-
-權限規則:
-  創建路由: 團隊 ADMIN, MANAGER, DEVELOPER
-  查看路由: 所有人可見
-  編輯路由: 該團隊 ADMIN, MANAGER
-  刪除路由: 該團隊 ADMIN, MANAGER
+權限規則（已實施）:
+  創建路由: Core Team ADMIN/MANAGER/DEVELOPER
+  查看路由: 所有已登入用戶
+  編輯路由: Core Team ADMIN/MANAGER
+  刪除路由: Core Team ADMIN only
   全局 ADMIN: 可管理所有路由
 
 優點:
-  ✅ 團隊自治
-  ✅ 責任歸屬清晰
-  ✅ 符合微服務架構
+  ✅ 專業分工
+  ✅ 權力分散（不只一個 ADMIN）
+  ✅ 可擴展（可加入多個 Core Team 成員）
+  ✅ 路由統一管理
+  ✅ 企業級 RBAC 最佳實踐
 
-缺點:
-  ❌ 路由可能碎片化
-  ❌ 跨團隊路由共享複雜
-  ❌ 管理成本增加
+實施文檔:
+  詳見 CORE_TEAM_IMPLEMENTATION.md
 ```
 
 ---
 
-## 🔄 實施步驟（方案 A - 推薦）
+## 🔄 實施步驟：路由後端微服務認證
 
-### **Phase 1: 後端升級**
+### **功能說明**
 
-#### 1. 數據庫 Schema（可選字段）
-```sql
-ALTER TABLE routes
-ADD COLUMN created_by_team VARCHAR(50),
-ADD COLUMN created_by_user VARCHAR(100);
+```yaml
+使用場景:
+  n8n → 我們的 Worker → OpenAI API
+  
+  問題: OpenAI 需要自己的 API Key
+  解決: Worker 轉發時自動添加 OpenAI 的認證
 
--- 不加外鍵約束，因為是可選的追蹤信息
+設計:
+  1. 路由創建時可以設定後端認證方式
+  2. 認證配置儲存在 routes 表
+  3. Worker 轉發時根據配置添加認證 header
+  4. 實際的 API Key 儲存在 Cloudflare Secrets
 ```
 
-#### 2. API 權限控制
+---
+
+### **Phase 1: 數據庫 Schema 擴展**
+
+```sql
+ALTER TABLE routes
+ADD COLUMN backend_auth_type VARCHAR(50) DEFAULT 'none',
+ADD COLUMN backend_auth_config JSONB;
+
+-- 支援的認證類型:
+-- 'none'      - 無需認證
+-- 'bearer'    - Bearer Token
+-- 'api-key'   - API Key (可自訂 header)
+-- 'basic'     - Basic Auth
+-- 'custom'    - 自訂 headers
+```
+
+---
+
+### **Phase 2: 後端 Models 和 API**
+
 ```python
-# backend/main.py
+# models.py
+class RouteCreate(BaseModel):
+    name: str
+    path: str
+    backend_url: str
+    tags: Optional[List[str]] = []
+    backend_auth_type: Optional[str] = "none"
+    backend_auth_config: Optional[dict] = None
 
-async def check_route_permission(user, action):
-    """檢查路由管理權限"""
-    global_role = user.get("public_metadata", {}).get("tokenManager:globalRole")
-    
-    if global_role != "ADMIN":
-        raise HTTPException(403, "只有全局 ADMIN 可以管理路由")
-
-# 應用到所有路由 CRUD API
+# main.py
 @app.post("/api/routes")
 async def create_route(data: RouteCreate, request: Request):
     user = await verify_clerk_token(request)
-    await check_route_permission(user, "create")
-    # ... 創建邏輯
-```
-
-#### 3. 記錄創建者
-```python
-route_id = await conn.fetchval("""
-    INSERT INTO routes (name, path, backend_url, description, tags, 
-                       created_by_team, created_by_user)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-    RETURNING id
-""", data.name, data.path, data.backend_url, data.description, 
-    data.tags, get_user_primary_team(user), user["id"])
+    await check_core_team_permission(user, "create")
+    
+    # 如果有敏感認證配置，需要 Core Team ADMIN
+    if data.backend_auth_config and data.backend_auth_type != 'none':
+        core_role = get_user_role_in_team(user, "core-team")
+        if core_role != "ADMIN":
+            raise HTTPException(403, "設定後端認證需要 Core Team ADMIN 權限")
+    
+    # ... 儲存邏輯
 ```
 
 ---
 
-### **Phase 2: 前端升級**
+### **Phase 3: 前端 UI**
 
-#### 1. RouteForm.jsx
 ```jsx
-// 添加權限檢查
-const { user } = useUser();
-const globalRole = user?.publicMetadata?.['tokenManager:globalRole'];
+// RouteForm.jsx - 添加認證設定
+<div className="form-group">
+  <label>後端服務認證方式</label>
+  <select value={authType} onChange={e => setAuthType(e.target.value)}>
+    <option value="none">無需認證</option>
+    <option value="bearer">Bearer Token</option>
+    <option value="api-key">API Key</option>
+  </select>
+</div>
 
-if (globalRole !== 'ADMIN') {
-  return <div>只有全局 ADMIN 可以創建路由</div>;
-}
-
-// 創建時自動記錄（後端處理，前端不需要改動）
-```
-
-#### 2. RouteList.jsx
-```jsx
-// 所有人可以看到路由列表
-// 但只有 ADMIN 能看到編輯/刪除按鈕
-
-{globalRole === 'ADMIN' && (
-  <>
-    <button onClick={() => handleEdit(route)}>編輯</button>
-    <button onClick={() => handleDelete(route.id)}>刪除</button>
-  </>
+{authType === 'bearer' && (
+  <div className="form-group">
+    <label>Token 環境變數名稱</label>
+    <input 
+      placeholder="例如: OPENAI_API_KEY"
+      value={authConfig.token_ref}
+    />
+    <small>⚠️ 實際 API Key 需在 Cloudflare Worker 設定</small>
+  </div>
 )}
-
-// 顯示創建者信息（可選）
-<small>由 {route.created_by_team} 創建</small>
-```
-
-#### 3. API 調用加入認證
-```javascript
-// services/api.js - 已經完成
-// 所有路由 API 都需要加入 token 參數（參考 Token API 的做法）
 ```
 
 ---
 
-### **Phase 3: 測試與驗證**
+### **Phase 4: Cloudflare Worker 更新**
+
+```javascript
+// worker/src/worker.js
+const route = routes[matchedPath];
+
+// 添加後端認證
+if (route.auth && route.auth.type !== 'none') {
+  const authType = route.auth.type;
+  const authConfig = route.auth.config;
+  
+  switch (authType) {
+    case 'bearer':
+      const token = env[authConfig.token_ref];
+      backendHeaders.set('Authorization', `Bearer ${token}`);
+      break;
+    
+    case 'api-key':
+      const apiKey = env[authConfig.key_ref];
+      const headerName = authConfig.header_name || 'X-API-Key';
+      backendHeaders.set(headerName, apiKey);
+      break;
+  }
+}
+```
+
+---
+
+### **Phase 5: 測試**
 
 ```yaml
 測試清單:
-  - [ ] 全局 ADMIN 可以創建路由
-  - [ ] 非 ADMIN 無法創建路由
-  - [ ] 所有人可以查看路由列表
-  - [ ] 只有 ADMIN 能看到編輯/刪除按鈕
-  - [ ] 路由創建時正確記錄創建者
-  - [ ] 路由列表正確顯示（不受團隊影響）
+  - [ ] 創建無認證路由
+  - [ ] 創建 Bearer Token 認證路由
+  - [ ] 創建 API Key 認證路由
+  - [ ] Worker 正確添加後端認證 header
+  - [ ] 端到端測試（n8n → Worker → OpenAI）
 ```
 
 ---
@@ -256,51 +255,44 @@ if (globalRole !== 'ADMIN') {
 
 ---
 
-## 🎯 我的建議
+## 🎯 推薦開發順序
 
 ### **最佳順序**
 
 ```
-1. ✅ Token 管理整合團隊（已完成）
-2. 🎯 路由管理整合團隊（下一步）← 推薦方案 A
-3. 📊 統計分析 Dashboard
-4. 🌐 Cloudflare Worker 整合
-5. 📚 文檔和 API Reference
+1. ✅ 團隊管理（已完成）
+2. ✅ 用戶管理（已完成）
+3. ✅ Token 管理整合團隊（已完成）
+4. ✅ 路由管理 Core Team 權限（已完成）
+5. 🎯 路由的後端微服務認證（下一步）← 當前任務
+6. 🌐 Cloudflare Worker 整合測試
+7. 📊 統計分析 Dashboard（可選）
+8. 📚 文檔和部署
 ```
 
 ### **理由**
 
-1. **完整性優先**
-   - Token + Route 是核心業務閉環
-   - 完成後系統可以實際使用
+1. **完成核心功能**
+   - 後端認證是路由系統的最後一塊拼圖
+   - 完成後整個 Token Manager 就可以實際使用了
 
-2. **簡單優先**
-   - 方案 A（全局路由）最簡單
-   - 避免過度設計
+2. **價值優先**
+   - 這是實際使用中必需的功能
+   - OpenAI、AWS 等服務都需要認證
 
-3. **價值優先**
-   - 路由管理是必需功能
-   - Dashboard 是錦上添花
-
----
-
-## ❓ 決策點
-
-請決定下一步要做什麼：
-
-### **選項 1: 路由管理整合（推薦）**
-- [ ] 採用方案 A（全局路由，ADMIN 管理）
-- [ ] 採用方案 B（團隊路由，團隊管理）
-
-### **選項 2: 統計分析 Dashboard**
-- [ ] 先做視覺化，提升體驗
-
-### **選項 3: 其他功能**
-- [ ] 你有其他想法？
+3. **安全性**
+   - 隱藏真實的微服務 API Key
+   - 提供統一的認證管理
 
 ---
 
-**建議**: 我強烈推薦 **選項 1 + 方案 A**，因為這是最簡單且最合理的方案，能快速完成主線功能閉環。
+## 📝 當前任務
 
-完成後，整個系統的核心功能就全部打通了！🚀
+**實施路由的後端微服務認證功能**
+
+詳細設計請參考：`docs/ROUTE_BACKEND_AUTH_DESIGN.md`
+
+預計時間：1-2 小時
+
+完成後，整個系統就可以端到端運作了！🚀
 

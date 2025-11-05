@@ -9,6 +9,7 @@ import secrets
 import hashlib
 import os
 import base64
+import json
 from dotenv import load_dotenv
 from cryptography.fernet import Fernet
 
@@ -258,7 +259,7 @@ async def create_token(data: TokenCreate, request: Request):
         
         # 5. 記錄審計日誌
         await log_audit("create", "token", token_id, {
-            "name": data.name,
+            "name": data.name, 
             "team_id": data.team_id,
             "created_by": user["id"]
         })
@@ -402,7 +403,21 @@ async def update_token(token_id: int, data: TokenUpdate, request: Request):
         "updated_by": user["id"]
     })
     
-    return TokenResponse(**dict(updated_token))
+    # 生成 token_preview
+    token_dict = dict(updated_token)
+    if token_dict.get('token_encrypted'):
+        try:
+            full_token = decrypt_token(token_dict['token_encrypted'])
+            if len(full_token) > 16:
+                token_dict['token_preview'] = f"{full_token[:12]}...{full_token[-6:]}"
+            else:
+                token_dict['token_preview'] = full_token
+        except:
+            token_dict['token_preview'] = "ntk_***...***"
+    else:
+        token_dict['token_preview'] = "***舊版Token***"
+    
+    return TokenResponse(**token_dict)
 
 
 @app.get("/api/tokens/{token_id}/reveal")
@@ -488,14 +503,26 @@ async def create_route(data: RouteCreate, request: Request):
     user = await verify_clerk_token(request)
     await check_core_team_permission(user, "create")
     
-    # 1. 存入資料庫
+    # 0. 如果有實際密鑰，先儲存到 Cloudflare KV
+    if data.backend_auth_secrets:
+        try:
+            cf_kv = get_cf_kv()
+            for secret_name, secret_value in data.backend_auth_secrets.items():
+                await cf_kv.put_secret(secret_name, secret_value)
+                print(f"✅ Stored secret {secret_name} to Cloudflare KV")
+        except Exception as e:
+            raise HTTPException(500, f"Failed to store secrets to Cloudflare: {str(e)}")
+    
+    # 1. 存入資料庫（只儲存配置，不儲存實際密鑰）
     async with db.pool.acquire() as conn:
         try:
             route_id = await conn.fetchval("""
-                INSERT INTO routes (name, path, backend_url, description, tags)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO routes (name, path, backend_url, description, tags, backend_auth_type, backend_auth_config)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
                 RETURNING id
-            """, data.name, data.path, data.backend_url, data.description, data.tags or [])
+            """, data.name, data.path, data.backend_url, data.description, data.tags or [], 
+                data.backend_auth_type or 'none', 
+                json.dumps(data.backend_auth_config) if data.backend_auth_config else None)
             
             created_at = await conn.fetchval(
                 "SELECT created_at FROM routes WHERE id = $1", route_id
@@ -515,6 +542,14 @@ async def create_route(data: RouteCreate, request: Request):
         "tags": data.tags or []
     })
     
+    # 確保返回時 backend_auth_config 是 dict（Pydantic 期望 dict）
+    auth_config_for_response = data.backend_auth_config
+    if auth_config_for_response and isinstance(auth_config_for_response, str):
+        try:
+            auth_config_for_response = json.loads(auth_config_for_response)
+        except:
+            auth_config_for_response = None
+    
     return RouteResponse(
         id=route_id,
         name=data.name,
@@ -522,6 +557,8 @@ async def create_route(data: RouteCreate, request: Request):
         backend_url=data.backend_url,
         description=data.description,
         tags=data.tags or [],
+        backend_auth_type=data.backend_auth_type or 'none',
+        backend_auth_config=auth_config_for_response,
         created_at=created_at
     )
 
@@ -529,17 +566,48 @@ async def create_route(data: RouteCreate, request: Request):
 @app.get("/api/routes", response_model=List[RouteResponse])
 async def list_routes(request: Request):
     """列出所有路由 - 所有已登入用戶都可以查看"""
-    # 驗證用戶身份（但不檢查特定權限，所有人都可以查看）
-    user = await verify_clerk_token(request)
-    
-    async with db.pool.acquire() as conn:
-        rows = await conn.fetch("""
-            SELECT id, name, path, backend_url, description, tags, created_at
-            FROM routes
-            ORDER BY created_at DESC
-        """)
-    
-    return [RouteResponse(**dict(row)) for row in rows]
+    try:
+        # 驗證用戶身份（但不檢查特定權限，所有人都可以查看）
+        user = await verify_clerk_token(request)
+        
+        async with db.pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT id, name, path, backend_url, description, tags, 
+                       backend_auth_type, backend_auth_config, created_at
+                FROM routes
+                ORDER BY created_at DESC
+            """)
+        
+            # 處理 JSONB 類型的 backend_auth_config
+            routes = []
+            for row in rows:
+                route_dict = dict(row)
+                
+                # 強制確保 backend_auth_config 是 dict 或 None
+                auth_config = route_dict.get('backend_auth_config')
+                if auth_config:
+                    if isinstance(auth_config, str):
+                        # 如果是字串，解析為 dict
+                        try:
+                            route_dict['backend_auth_config'] = json.loads(auth_config)
+                        except:
+                            route_dict['backend_auth_config'] = None
+                    elif not isinstance(auth_config, dict):
+                        # 如果不是 dict 也不是字串，設為 None
+                        route_dict['backend_auth_config'] = None
+                else:
+                    route_dict['backend_auth_config'] = None
+                
+                routes.append(RouteResponse(**route_dict))
+            
+            return routes
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"❌ Error in list_routes: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(500, f"Failed to list routes: {str(e)}")
 
 
 @app.put("/api/routes/{route_id}", response_model=RouteResponse)
@@ -548,6 +616,16 @@ async def update_route(route_id: int, data: RouteUpdate, request: Request):
     # 驗證用戶身份和權限
     user = await verify_clerk_token(request)
     await check_core_team_permission(user, "edit")
+    
+    # 如果有更新實際密鑰，先儲存到 Cloudflare KV
+    if data.backend_auth_secrets:
+        try:
+            cf_kv = get_cf_kv()
+            for secret_name, secret_value in data.backend_auth_secrets.items():
+                await cf_kv.put_secret(secret_name, secret_value)
+                print(f"✅ Updated secret {secret_name} in Cloudflare KV")
+        except Exception as e:
+            print(f"Warning: Failed to update secrets: {e}")
     
     async with db.pool.acquire() as conn:
         # 獲取現有路由
@@ -580,6 +658,16 @@ async def update_route(route_id: int, data: RouteUpdate, request: Request):
             params.append(data.tags)
             param_count += 1
         
+        if data.backend_auth_type is not None:
+            updates.append(f"backend_auth_type = ${param_count}")
+            params.append(data.backend_auth_type)
+            param_count += 1
+        
+        if data.backend_auth_config is not None:
+            updates.append(f"backend_auth_config = ${param_count}::jsonb")
+            params.append(json.dumps(data.backend_auth_config) if data.backend_auth_config else None)
+            param_count += 1
+        
         if not updates:
             raise HTTPException(400, "No fields to update")
         
@@ -599,7 +687,16 @@ async def update_route(route_id: int, data: RouteUpdate, request: Request):
         "tags": data.tags
     })
     
-    return RouteResponse(**dict(route))
+    # 處理 backend_auth_config（如果是字串則解析為 dict）
+    route_dict = dict(route)
+    if route_dict.get('backend_auth_config'):
+        if isinstance(route_dict['backend_auth_config'], str):
+            try:
+                route_dict['backend_auth_config'] = json.loads(route_dict['backend_auth_config'])
+            except:
+                route_dict['backend_auth_config'] = None
+    
+    return RouteResponse(**route_dict)
 
 
 @app.get("/api/routes/tags")
@@ -644,17 +741,38 @@ async def delete_route(route_id: int, request: Request):
 
 
 async def sync_routes_to_kv():
-    """同步所有路由到 Cloudflare KV (包含 tags 信息)"""
+    """同步所有路由到 Cloudflare KV (包含 tags 和後端認證信息)"""
     async with db.pool.acquire() as conn:
-        routes = await conn.fetch("SELECT path, backend_url, tags FROM routes")
+        routes = await conn.fetch("""
+            SELECT path, backend_url, tags, backend_auth_type, backend_auth_config 
+            FROM routes
+        """)
     
-    # 新格式: {path: {url: backend_url, tags: [...]}}
+    # 格式: {path: {url, tags, auth}}
     routes_map = {}
     for route in routes:
-        routes_map[route['path']] = {
+        route_config = {
             'url': route['backend_url'],
             'tags': route['tags'] or []
         }
+        
+        # 添加後端認證配置
+        if route['backend_auth_type'] and route['backend_auth_type'] != 'none':
+            auth_config = route['backend_auth_config']
+            
+            # 確保 auth_config 是 dict
+            if isinstance(auth_config, str):
+                try:
+                    auth_config = json.loads(auth_config)
+                except:
+                    auth_config = {}
+            
+            route_config['auth'] = {
+                'type': route['backend_auth_type'],
+                'config': auth_config or {}
+            }
+        
+        routes_map[route['path']] = route_config
     
     try:
         cf_kv = get_cf_kv()

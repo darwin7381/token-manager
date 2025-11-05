@@ -47,12 +47,14 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   transition: background-color 0.3s, color 0.3s;
+  overflow-x: hidden;
 }
 
 /* Dashboard 布局 */
 .dashboard {
   display: flex;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* 側邊欄 */
@@ -295,6 +297,7 @@ body {
   flex-direction: column;
   min-height: 100vh;
   transition: margin-left 0.3s;
+  overflow-x: hidden;
 }
 
 .main-content.sidebar-collapsed {
@@ -563,8 +566,8 @@ body {
 .content-area {
   flex: 1;
   padding: 32px;
-  max-width: 1600px;
   width: 100%;
+  overflow-x: hidden;
 }
 
 /* Footer */
@@ -607,6 +610,37 @@ body {
 
 .section:hover {
   box-shadow: var(--shadow-md);
+}
+
+/* 表格容器 - 支援水平滾動 */
+.table-container {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-container::-webkit-scrollbar {
+  height: 10px;
+}
+
+.table-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 5px;
+  transition: background 0.2s;
+}
+
+.table-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Firefox */
+.table-container {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
 h2 {

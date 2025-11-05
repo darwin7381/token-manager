@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { List, RefreshCw, Edit, Trash2, Copy } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
-import { listTokens, deleteToken, fetchTeams, revealToken } from '../../services/api';
+import { listTokens, deleteToken, fetchTeams, revealToken, listRoutes, listTags } from '../../services/api';
 import EditTokenModal from './EditTokenModal';
 
 export default function TokenList({ onUpdate }) {
   const { getToken } = useAuth();
   const [tokens, setTokens] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [routes, setRoutes] = useState([]);
+  const [availableTags, setAvailableTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingToken, setEditingToken] = useState(null);
   const [revealedToken, setRevealedToken] = useState(null);
@@ -16,17 +18,40 @@ export default function TokenList({ onUpdate }) {
   const loadTokens = async () => {
     try {
       const token = await getToken();
-      const [tokensData, teamsData] = await Promise.all([
+      const [tokensData, teamsData, routesData, tagsData] = await Promise.all([
         listTokens(token),
-        fetchTeams(token)
+        fetchTeams(token),
+        listRoutes(token),
+        listTags(token)
       ]);
       setTokens(tokensData);
       setTeams(teamsData);
+      setRoutes(routesData);
+      setAvailableTags(tagsData.tags || []);
     } catch (error) {
       console.error('Failed to load tokens:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // 檢查 scope 是否有效
+  const isScopeValid = (scope) => {
+    if (scope === '*') return true;
+    
+    if (scope.startsWith('tag:')) {
+      const tagName = scope.substring(4);
+      return availableTags.includes(tagName);
+    }
+    
+    // 檢查是否是有效的路由路徑（如 'openai' 匹配 '/api/openai'）
+    const matchingRoute = routes.find(r => {
+      const pathParts = r.path.split('/').filter(p => p);
+      // /api/openai -> ['api', 'openai']
+      // scope 'openai' 應該匹配第二部分
+      return pathParts.length >= 2 && pathParts[1] === scope;
+    });
+    return !!matchingRoute;
   };
 
   const getTeamDisplay = (teamId) => {
@@ -120,7 +145,9 @@ export default function TokenList({ onUpdate }) {
                 <span className="badge badge-info">{getTeamDisplay(token.team_id)}</span>
               </td>
               <td>
-                {token.scopes.map((scope) => (
+                {token.scopes.map((scope) => {
+                  const isValid = isScopeValid(scope);
+                  return (
                   <span
                     key={scope}
                     className={`badge ${
@@ -130,10 +157,15 @@ export default function TokenList({ onUpdate }) {
                         ? 'badge-warning'
                         : 'badge-info'
                     }`}
+                      style={!isValid ? { 
+                        border: '2px solid #ef4444'
+                      } : {}}
+                      title={!isValid ? '⚠️ 此路由或標籤不存在' : ''}
                   >
-                    {scope}
+                      {!isValid && '⚠️ '}{scope}
                   </span>
-                ))}
+                  );
+                })}
               </td>
               <td>{formatDate(token.created_at)}</td>
               <td>{token.expires_at ? formatDate(token.expires_at) : '永不過期'}</td>

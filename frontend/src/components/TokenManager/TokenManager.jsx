@@ -26,7 +26,7 @@ export default function TokenManager() {
           onCreated={() => {
             setRefresh(r => r + 1);
             setShowCreateModal(false);
-          }}
+          }} 
         />
       )}
     </>

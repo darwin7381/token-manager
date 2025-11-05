@@ -66,6 +66,8 @@ export default {
       // 按路徑長度降序排序,確保最具體的路徑優先匹配
       const sortedPaths = Object.keys(routes).sort((a, b) => b.length - a.length);
       
+      let routeAuth = null;
+      
       for (const path of sortedPaths) {
         if (url.pathname.startsWith(path)) {
           const routeData = routes[path];
@@ -74,10 +76,12 @@ export default {
             // 舊格式: {path: "url"}
             backend = routeData;
             routeTags = [];
+            routeAuth = null;
           } else {
-            // 新格式: {path: {url: "url", tags: [...]}}
+            // 新格式: {path: {url: "url", tags: [...], auth: {...}}}
             backend = routeData.url;
             routeTags = routeData.tags || [];
+            routeAuth = routeData.auth || null;
           }
           matchedPath = path;
           break;
@@ -142,18 +146,80 @@ export default {
       const backendPath = url.pathname.substring(matchedPath.length);
       const backendUrl = backend + backendPath + url.search;
       
-      // 9. 轉發請求
+      // 9. 準備後端請求的 headers（添加後端認證）
+      const backendHeaders = new Headers(request.headers);
+      
+      // 添加後端微服務認證
+      if (routeAuth && routeAuth.type && routeAuth.type !== 'none') {
+        const authType = routeAuth.type;
+        const authConfig = routeAuth.config || {};
+        
+        try {
+          switch (authType) {
+            case 'bearer':
+              // Bearer Token 認證
+              // 先嘗試從 env 讀取（wrangler secret），再從 KV 讀取（UI 設定）
+              let bearerToken = env[authConfig.token_ref];
+              if (!bearerToken && authConfig.token_ref) {
+                const secretData = await env.TOKENS.get(`secret:${authConfig.token_ref}`, { type: 'json' });
+                bearerToken = secretData?.value;
+              }
+              if (bearerToken) {
+                backendHeaders.set('Authorization', `Bearer ${bearerToken}`);
+              }
+              break;
+            
+            case 'api-key':
+              // API Key 認證
+              let apiKey = env[authConfig.key_ref];
+              if (!apiKey && authConfig.key_ref) {
+                const secretData = await env.TOKENS.get(`secret:${authConfig.key_ref}`, { type: 'json' });
+                apiKey = secretData?.value;
+              }
+              if (apiKey) {
+                const headerName = authConfig.header_name || 'X-API-Key';
+                backendHeaders.set(headerName, apiKey);
+              }
+              break;
+            
+            case 'basic':
+              // Basic Auth 認證
+              let username = env[authConfig.username_ref];
+              let password = env[authConfig.password_ref];
+              
+              if (!username && authConfig.username_ref) {
+                const secretData = await env.TOKENS.get(`secret:${authConfig.username_ref}`, { type: 'json' });
+                username = secretData?.value;
+              }
+              if (!password && authConfig.password_ref) {
+                const secretData = await env.TOKENS.get(`secret:${authConfig.password_ref}`, { type: 'json' });
+                password = secretData?.value;
+              }
+              
+              if (username && password) {
+                const credentials = btoa(`${username}:${password}`);
+                backendHeaders.set('Authorization', `Basic ${credentials}`);
+              }
+              break;
+          }
+        } catch (error) {
+          console.error('Backend auth error:', error);
+          // 繼續轉發，但沒有後端認證
+        }
+      }
+      
+      // 10. 轉發請求
       const backendRequest = new Request(backendUrl, {
         method: request.method,
-        headers: request.headers,
+        headers: backendHeaders,
         body: request.body,
         redirect: 'follow'
       });
       
-      // 10. 返回響應
+      // 11. 返回響應
       const response = await fetch(backendRequest);
       
-      // 11. (可選) 記錄使用情況
+      // 12. (可選) 記錄使用情況
       // 注意: KV 寫入有配額,生產環境建議用 Durable Objects 或外部日誌服務
       // 這裡我們暫時跳過,避免配額消耗
       

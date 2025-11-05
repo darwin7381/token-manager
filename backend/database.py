@@ -163,6 +163,8 @@ class Database:
                     backend_url TEXT NOT NULL,
                     description TEXT,
                     tags TEXT[] DEFAULT '{}',
+                    backend_auth_type VARCHAR(50) DEFAULT 'none',
+                    backend_auth_config JSONB,
                     created_at TIMESTAMP NOT NULL DEFAULT NOW()
                 )
             """)
@@ -176,6 +178,23 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_routes_tags 
                 ON routes USING GIN(tags)
             """)
+            
+            # 檢查並添加後端認證欄位
+            auth_type_exists = await conn.fetchval("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name='routes' AND column_name='backend_auth_type'
+                )
+            """)
+            
+            if not auth_type_exists:
+                print("🔄 Adding backend authentication columns to routes table...")
+                await conn.execute("""
+                    ALTER TABLE routes 
+                    ADD COLUMN IF NOT EXISTS backend_auth_type VARCHAR(50) DEFAULT 'none',
+                    ADD COLUMN IF NOT EXISTS backend_auth_config JSONB
+                """)
+                print("✅ Backend authentication support added to routes")
             
             # Audit Logs 表
             await conn.execute("""
