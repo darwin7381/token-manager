@@ -92,7 +92,7 @@ function UsageAnalytics() {
     return null;
   }
 
-  const { overview, hourly_usage, top_tokens, top_routes } = data;
+  const { overview, hourly_usage, top_tokens, top_routes, recent_logs = [] } = data;
 
   // 準備圖表數據
   const hourlyData = hourly_usage.map(item => ({
@@ -159,52 +159,96 @@ function UsageAnalytics() {
 
       {/* 圖表區域 */}
       <div className="charts-section">
-        {/* 24 小時調用趨勢 */}
-        <div className="chart-card chart-full">
-          <div className="chart-header">
-            <h3>
-              <TrendingUp size={20} />
-              24 小時調用趨勢
-            </h3>
-            <span className="chart-subtitle">每小時統計</span>
+        {/* 第一行：24 小時調用趨勢（2/3）+ 路由使用分佈（1/3） */}
+        <div className="charts-row">
+          {/* 24 小時調用趨勢 */}
+          <div className="chart-card" style={{ flex: '2' }}>
+            <div className="chart-header">
+              <h3>
+                <TrendingUp size={20} />
+                24 小時調用趨勢
+              </h3>
+              <span className="chart-subtitle">每小時統計</span>
+            </div>
+            <div className="chart-content">
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={hourlyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="time" stroke="var(--text-secondary)" />
+                  <YAxis yAxisId="left" stroke="var(--text-secondary)" />
+                  <YAxis yAxisId="right" orientation="right" stroke="var(--text-tertiary)" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'var(--bg-primary)', 
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)'
+                    }} 
+                  />
+                  <Legend />
+                  <Line 
+                    yAxisId="left"
+                    type="monotone" 
+                    dataKey="calls" 
+                    stroke="#3b82f6" 
+                    strokeWidth={2}
+                    dot={{ fill: '#3b82f6', r: 4 }}
+                    name="調用次數"
+                  />
+                  <Line 
+                    yAxisId="right"
+                    type="monotone" 
+                    dataKey="avgTime" 
+                    stroke="#8b5cf6" 
+                    strokeWidth={2}
+                    dot={{ fill: '#8b5cf6', r: 4 }}
+                    name="平均響應時間 (ms)"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-          <div className="chart-content">
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={hourlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                <XAxis dataKey="time" stroke="var(--text-secondary)" />
-                <YAxis yAxisId="left" stroke="var(--text-secondary)" />
-                <YAxis yAxisId="right" orientation="right" stroke="var(--text-tertiary)" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'var(--bg-primary)', 
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    color: 'var(--text-primary)'
-                  }} 
-                />
-                <Legend />
-                <Line 
-                  yAxisId="left"
-                  type="monotone" 
-                  dataKey="calls" 
-                  stroke="#3b82f6" 
-                  strokeWidth={2}
-                  dot={{ fill: '#3b82f6', r: 4 }}
-                  name="調用次數"
-                />
-                <Line 
-                  yAxisId="right"
-                  type="monotone" 
-                  dataKey="avgTime" 
-                  stroke="#8b5cf6" 
-                  strokeWidth={2}
-                  dot={{ fill: '#8b5cf6', r: 4 }}
-                  name="平均響應時間 (ms)"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+
+          {/* 路由使用分佈（餅圖） */}
+          {routePieData.length > 0 && (
+            <div className="chart-card" style={{ flex: '1' }}>
+              <div className="chart-header">
+                <h3>
+                  <PieChartIcon size={20} />
+                  路由使用分佈
+                </h3>
+                <span className="chart-subtitle">Top 5 路由</span>
+              </div>
+              <div className="chart-content">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={routePieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={100}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {routePieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'var(--bg-primary)', 
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '8px',
+                        color: 'var(--text-primary)'
+                      }} 
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Top Token 和 Top 路由 */}
@@ -273,43 +317,49 @@ function UsageAnalytics() {
           </div>
         </div>
 
-        {/* 路由使用分佈（餅圖） */}
-        {routePieData.length > 0 && (
-          <div className="chart-card">
+        {/* API 調用記錄列表（全寬） */}
+        {recent_logs.length > 0 && (
+          <div className="chart-card chart-full">
             <div className="chart-header">
               <h3>
-                <PieChartIcon size={20} />
-                路由使用分佈
+                <Activity size={20} />
+                詳細調用記錄
               </h3>
-              <span className="chart-subtitle">Top 5 路由</span>
+              <span className="chart-subtitle">最近 100 次調用</span>
             </div>
             <div className="chart-content">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={routePieData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                    outerRadius={100}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {routePieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+              <div className="usage-logs-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>時間</th>
+                      <th>Token</th>
+                      <th>路由</th>
+                      <th>方法</th>
+                      <th>狀態</th>
+                      <th>響應時間</th>
+                      <th>IP 地址</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recent_logs.map((log, index) => (
+                      <tr key={index}>
+                        <td>{new Date(log.used_at).toLocaleString('zh-TW')}</td>
+                        <td>{log.token_hash ? log.token_hash.substring(0, 12) + '...' : 'N/A'}</td>
+                        <td>{log.route_path}</td>
+                        <td><span className="badge badge-info">{log.request_method}</span></td>
+                        <td>
+                          <span className={`badge ${log.response_status >= 200 && log.response_status < 300 ? 'badge-success' : 'badge-danger'}`}>
+                            {log.response_status}
+                          </span>
+                        </td>
+                        <td>{log.response_time_ms}ms</td>
+                        <td>{log.ip_address || 'N/A'}</td>
+                      </tr>
                     ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'var(--bg-primary)', 
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      color: 'var(--text-primary)'
-                    }} 
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

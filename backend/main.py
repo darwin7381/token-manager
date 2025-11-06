@@ -1156,6 +1156,21 @@ async def get_usage_stats(request: Request):
             ORDER BY call_count DESC
             LIMIT 10
         """)
+        
+        # 5. 最近 100 條調用記錄
+        recent_logs = await conn.fetch("""
+            SELECT 
+                token_hash,
+                route_path,
+                request_method,
+                response_status,
+                response_time_ms,
+                ip_address,
+                used_at
+            FROM token_usage_logs
+            ORDER BY used_at DESC
+            LIMIT 100
+        """)
     
     return {
         "overview": {
@@ -1193,6 +1208,18 @@ async def get_usage_stats(request: Request):
                 "success_rate": ((row['call_count'] - row['error_count']) / row['call_count'] * 100) if row['call_count'] > 0 else 0
             }
             for row in top_routes
+        ],
+        "recent_logs": [
+            {
+                "token_hash": row['token_hash'],
+                "route_path": row['route_path'],
+                "request_method": row['request_method'],
+                "response_status": row['response_status'],
+                "response_time_ms": row['response_time_ms'],
+                "ip_address": row['ip_address'],
+                "used_at": row['used_at'].isoformat() if row['used_at'] else None
+            }
+            for row in recent_logs
         ]
     }
 
