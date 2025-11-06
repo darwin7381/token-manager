@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+*.egg-info/
+dist/
+build/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+frontend/
+worker/
+docs/
+scripts/
+*.md
+.git/
+.gitignore
+*.sh
+
+# Environment
+.env
+.env.local
+backend/.env
+
