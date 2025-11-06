@@ -395,7 +395,7 @@ LIMIT 10;
 ### **Worker 實施（100% 完成）**
 - ✅ 異步記錄邏輯（使用 `ctx.waitUntil()`）
 - ✅ 記錄詳細資訊（狀態碼、響應時間、IP、User-Agent等）
-- ✅ 環境變數配置（token.blocktempo.ai）
+- ✅ 環境變數配置（tapi.blocktempo.ai）
 - ✅ 5 秒超時保護
 - ✅ 錯誤處理（失敗不影響主流程）
 - ✅ 已部署到 Cloudflare
@@ -451,13 +451,13 @@ CREATE TABLE token_usage_logs (
 - ⏳ 端到端完整流程
 
 ### **當前問題**
-⚠️ **Worker 配置的後端 URL 為 `https://token.blocktempo.ai`**
+⚠️ **Worker 配置的後端 URL 為 `https://tapi.blocktempo.ai`**
 - 這個域名還未設置（指向 Railway 後端）
 - 所以 Worker 的異步記錄暫時無法成功發送
 - 需要等待域名配置完成
 
 **解決方案**：
-1. **短期**：在 Railway 設置自定義域名 `token.blocktempo.ai`
+1. **短期**：在 Railway 設置自定義域名 `tapi.blocktempo.ai`
 2. **或臨時**：使用 Railway 提供的 URL（需重新部署 Worker）
 3. **本地測試**：使用 `wrangler dev` + 本地後端完整測試
 

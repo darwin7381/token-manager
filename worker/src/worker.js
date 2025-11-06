@@ -281,9 +281,9 @@ function jsonResponse(data, status = 200) {
 async function logTokenUsage(usageData, env) {
   try {
     // 從環境變數獲取後端 URL
-    // 生產環境: https://token.blocktempo.ai
+    // 生產環境: https://tapi.blocktempo.ai
     // 開發環境: http://localhost:8000
-    const backendUrl = env.TOKEN_MANAGER_BACKEND || 'https://token.blocktempo.ai';
+    const backendUrl = env.TOKEN_MANAGER_BACKEND || 'https://tapi.blocktempo.ai';
     
     const payload = {
       token_hash: usageData.tokenHash,

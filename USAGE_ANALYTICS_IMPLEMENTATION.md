@@ -45,7 +45,7 @@ Cloudflare Worker (api-gateway.cryptoxlab.workers.dev)
     ├─→ 返回響應給 n8n
     └─→ ctx.waitUntil(異步記錄) ← 關鍵！
            ↓
-        POST https://token.blocktempo.ai/api/usage-log
+        POST https://tapi.blocktempo.ai/api/usage-log
            ↓ (記錄詳細資訊)
         {
           token_hash: "sha256...",
@@ -263,7 +263,7 @@ CREATE INDEX idx_usage_composite ON token_usage_logs(token_hash, used_at DESC);
 **原因**：
 ```javascript
 // Worker 配置為：
-TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 
 // 但這個域名還未指向你的 Railway 後端
 // 所以 Worker 的 fetch 會失敗（連接錯誤）
@@ -309,7 +309,7 @@ http://localhost:5173/usage-analytics
 
 ```
 前提條件：
-1. 在 Railway 設置自定義域名：token.blocktempo.ai
+1. 在 Railway 設置自定義域名：tapi.blocktempo.ai
 2. 或臨時修改 wrangler.toml 使用 Railway URL
 3. 重新部署 Worker
 
@@ -386,7 +386,7 @@ SELECT route_path, COUNT(*) FROM token_usage_logs GROUP BY route_path;
 
 **沒收到的**：
 - ❌ Cloudflare Worker 的真實調用記錄
-- **原因**：Worker 配置的 URL 是 `https://token.blocktempo.ai`（尚未設置）
+- **原因**：Worker 配置的 URL 是 `https://tapi.blocktempo.ai`（尚未設置）
 
 ---
 
@@ -398,7 +398,7 @@ SELECT route_path, COUNT(*) FROM token_usage_logs GROUP BY route_path;
 |------|---------------------------|-------------------------|
 | **KV 數據** | 本地 KV（可能不同步） | 生產 KV（實時數據） |
 | **環境變數** | 使用 [env.dev] | 使用 [vars] |
-| **後端 URL** | http://localhost:8000 | https://token.blocktempo.ai |
+| **後端 URL** | http://localhost:8000 | https://tapi.blocktempo.ai |
 | **Token 驗證** | 需要 Token 在本地 KV | 需要 Token 在生產 KV |
 | **適用場景** | 開發調試 | 真實使用 |
 
@@ -421,7 +421,7 @@ curl https://api-gateway.cryptoxlab.workers.dev/api/openai/...
 
 # 測試結果：
 ✅ OpenAI API 調用成功（返回「使用追蹤測試成功。」）
-❌ 但使用記錄沒有發送到後端（因為 token.blocktempo.ai 未設置）
+❌ 但使用記錄沒有發送到後端（因為 tapi.blocktempo.ai 未設置）
 ```
 
 ---
@@ -489,7 +489,7 @@ http://localhost:5173/usage-analytics
 
 **前提條件**：
 ```
-1. 在 Railway 設置自定義域名：token.blocktempo.ai
+1. 在 Railway 設置自定義域名：tapi.blocktempo.ai
 2. DNS 配置生效
 3. SSL 證書配置
 ```
@@ -497,11 +497,11 @@ http://localhost:5173/usage-analytics
 **測試步驟**：
 ```bash
 # 1. 確認域名可訪問
-curl https://token.blocktempo.ai/health
+curl https://tapi.blocktempo.ai/health
 
 # 2. Worker 已部署（已完成）
 # Worker URL: https://api-gateway.cryptoxlab.workers.dev
-# Worker 配置：TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+# Worker 配置：TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 
 # 3. 使用真實 Token 調用
 curl -X POST https://api-gateway.cryptoxlab.workers.dev/api/openai/chat/completions \
@@ -512,7 +512,7 @@ curl -X POST https://api-gateway.cryptoxlab.workers.dev/api/openai/chat/completi
 # 4. 等待 5-10 秒（異步處理）
 
 # 5. 查詢使用記錄
-curl https://token.blocktempo.ai/api/usage/test-data
+curl https://tapi.blocktempo.ai/api/usage/test-data
 
 # 6. 前端查看
 https://your-frontend-url/usage-analytics
@@ -595,7 +595,7 @@ https://your-frontend-url/usage-analytics
 
 ### **域名設置後**
 
-1. 配置 Railway 自定義域名：`token.blocktempo.ai`
+1. 配置 Railway 自定義域名：`tapi.blocktempo.ai`
 2. Worker 自動生效（已部署，環境變數已設置）
 3. 真實調用會自動記錄
 4. 前端立即可見數據

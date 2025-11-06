@@ -45,7 +45,7 @@ Cloudflare Worker (https://api-gateway.cryptoxlab.workers.dev)
     ├─→ 8. 返回響應給 n8n
     └─→ 9. ctx.waitUntil(異步記錄) ← 關鍵！
            ↓
-        POST https://token.blocktempo.ai/api/usage-log
+        POST https://tapi.blocktempo.ai/api/usage-log
            ↓ 發送詳細資訊
         {
           token_hash,           // 哪個 Token
@@ -315,20 +315,20 @@ http://localhost:5173/usage-analytics
 ### **方案 3：生產環境測試（需要域名）**
 
 **前提條件**：
-1. 在 Railway 設置自定義域名：`token.blocktempo.ai`
+1. 在 Railway 設置自定義域名：`tapi.blocktempo.ai`
 2. DNS 配置生效
 3. SSL 證書配置完成
 
 **測試步驟**：
 ```bash
 # 1. 確認域名可訪問
-curl https://token.blocktempo.ai/health
+curl https://tapi.blocktempo.ai/health
 
 # 預期：{"status":"healthy",...}
 
 # 2. Worker 已部署（已完成）
 # URL: https://api-gateway.cryptoxlab.workers.dev
-# 配置：TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+# 配置：TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 
 # 3. 使用真實 Token 調用
 curl -X POST https://api-gateway.cryptoxlab.workers.dev/api/openai/chat/completions \
@@ -341,7 +341,7 @@ curl -X POST https://api-gateway.cryptoxlab.workers.dev/api/openai/chat/completi
 # 4. 等待 5-10 秒（異步處理）
 
 # 5. 查詢使用記錄
-curl https://token.blocktempo.ai/api/usage/test-data
+curl https://tapi.blocktempo.ai/api/usage/test-data
 
 # 預期：看到新的使用記錄，包含：
 # - token_hash
@@ -486,14 +486,14 @@ https://your-frontend-url/usage-analytics
 
 ### **❌ 當前阻礙**
 
-**Worker 配置的後端 URL**：`https://token.blocktempo.ai`  
+**Worker 配置的後端 URL**：`https://tapi.blocktempo.ai`  
 **狀態**：域名未設置（不指向 Railway 後端）  
 **影響**：Worker 的異步記錄無法成功發送
 
 **解決方案（3 選 1）**：
 
 1. **設置域名**（推薦）：
-   - 在 Railway 添加自定義域名：`token.blocktempo.ai`
+   - 在 Railway 添加自定義域名：`tapi.blocktempo.ai`
    - Worker 自動生效（已部署，環境變數已配置）
 
 2. **臨時使用 Railway URL**：
@@ -573,11 +573,11 @@ curl http://localhost:8000/api/usage/test-data
 
 ### **第三步：生產環境測試** ⭐ 完整驗證
 
-**前提**：域名 `token.blocktempo.ai` 已配置
+**前提**：域名 `tapi.blocktempo.ai` 已配置
 
 ```bash
 # 1. 確認域名
-curl https://token.blocktempo.ai/health/detailed
+curl https://tapi.blocktempo.ai/health/detailed
 
 # 2. 通過 Worker 調用（使用 ROUTE_TESTING_GUIDE.md 中的測試）
 curl -X POST https://api-gateway.cryptoxlab.workers.dev/api/openai/chat/completions \
@@ -588,7 +588,7 @@ curl -X POST https://api-gateway.cryptoxlab.workers.dev/api/openai/chat/completi
 # 3. 等待 5-10 秒
 
 # 4. 查詢記錄
-curl https://token.blocktempo.ai/api/usage/test-data
+curl https://tapi.blocktempo.ai/api/usage/test-data
 
 # 5. 前端查看
 https://your-frontend-url/usage-analytics
@@ -676,7 +676,7 @@ frontend/src/components/Analytics/
 2. 驗證異步記錄功能
 
 ### **中期（生產部署）**
-1. 配置 Railway 域名：`token.blocktempo.ai`
+1. 配置 Railway 域名：`tapi.blocktempo.ai`
 2. 生產環境完整測試
 3. 驗證真實數據記錄
 

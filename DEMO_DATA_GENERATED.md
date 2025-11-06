@@ -276,7 +276,7 @@ curl http://localhost:8000/api/usage/stats \
 
 **4. 生產環境測試（需要域名）**：
 ```
-配置 token.blocktempo.ai
+配置 tapi.blocktempo.ai
 → 通過遠端 Worker 調用
 → 驗證完整端到端流程
 ```

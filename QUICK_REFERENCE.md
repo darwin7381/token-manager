@@ -118,7 +118,7 @@ CF_KV_NAMESPACE_ID=...
 ### **Worker（Cloudflare）**
 ```toml
 # 生產環境
-TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 
 # 開發環境
 TOKEN_MANAGER_BACKEND = "http://localhost:8000"
@@ -217,7 +217,7 @@ docs/BACKEND_AUTH_USAGE_GUIDE.md             - 後端認證指南
 
 ### **API 文檔**
 - 本地: http://localhost:8000/docs
-- 生產: https://token.blocktempo.ai/docs
+- 生產: https://tapi.blocktempo.ai/docs
 
 ### **相關文檔**
 - `README.md` - 項目總覽

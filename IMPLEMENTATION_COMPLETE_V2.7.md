@@ -91,7 +91,7 @@ n8n → Worker (驗證 Token)
 ```toml
 # 生產環境
 [vars]
-TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 
 # 本地開發
 [env.dev]
@@ -100,7 +100,7 @@ vars = { TOKEN_MANAGER_BACKEND = "http://localhost:8000" }
 
 #### **自動環境切換**
 - 本地開發：`wrangler dev` → 使用 `localhost:8000`
-- 生產部署：`wrangler deploy` → 使用 `token.blocktempo.ai`
+- 生產部署：`wrangler deploy` → 使用 `tapi.blocktempo.ai`
 
 ---
 
@@ -227,7 +227,7 @@ curl http://localhost:8787/api/test \
 **配置自定義域名**：
 ```
 Service: token-manager-backend
-Custom Domain: token.blocktempo.ai
+Custom Domain: tapi.blocktempo.ai
 ```
 
 **環境變數檢查**：
@@ -252,7 +252,7 @@ wrangler deploy
 wrangler tail
 
 # 應該自動使用 wrangler.toml 中的配置：
-# TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+# TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 ```
 
 ### **前端部署（Railway）**
@@ -391,7 +391,7 @@ POST /api/usage-log                 # Token 使用記錄（Worker 調用）
 ```toml
 # 生產環境
 [vars]
-TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 
 # 開發環境
 [env.dev]
@@ -495,10 +495,10 @@ curl http://localhost:8787/api/test \
 ## 🚀 生產部署檢查清單
 
 ### **後端（Railway）**
-- [ ] 設置自定義域名：`token.blocktempo.ai`
+- [ ] 設置自定義域名：`tapi.blocktempo.ai`
 - [ ] SSL 證書配置（Railway 自動）
 - [ ] 環境變數檢查
-- [ ] 健康檢查測試：`https://token.blocktempo.ai/health/detailed`
+- [ ] 健康檢查測試：`https://tapi.blocktempo.ai/health/detailed`
 
 ### **Worker（Cloudflare）**
 - [ ] 環境變數已設置（wrangler.toml 已配置）
@@ -577,7 +577,7 @@ curl http://localhost:8787/api/test \
 ✅ Token 使用追蹤系統  
 ✅ 設計系統完全統一  
 ✅ 暗夜模式完美支持  
-✅ 環境變數配置（token.blocktempo.ai）  
+✅ 環境變數配置（tapi.blocktempo.ai）  
 ✅ 本地測試工具  
 ✅ 完整文檔（4 份）
 

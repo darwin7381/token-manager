@@ -82,7 +82,7 @@ Cloudflare Worker
     ├─→ 轉發到後端微服務 ✅
     └─→ ctx.waitUntil(記錄使用) ← 異步，不阻塞
            ↓
-        POST https://token.blocktempo.ai/api/usage-log
+        POST https://tapi.blocktempo.ai/api/usage-log
            ↓
         更新 Token 的 last_used 時間
 ```
@@ -101,7 +101,7 @@ Cloudflare Worker
 ```toml
 # 生產環境
 [vars]
-TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 
 # 本地開發環境
 [env.dev]
@@ -132,7 +132,7 @@ npm run deploy
 # 或
 wrangler deploy
 
-# 會使用 https://token.blocktempo.ai 作為後端
+# 會使用 https://tapi.blocktempo.ai 作為後端
 ```
 
 ---
@@ -331,7 +331,7 @@ CREATE INDEX idx_usage_route ON token_usage_logs(route_path);
 ```yaml
 # Railway 設定
 Service: token-manager-backend
-Custom Domain: token.blocktempo.ai
+Custom Domain: tapi.blocktempo.ai
 
 # 確保 CORS 允許此域名
 # backend/main.py 中的 CORS 配置已設為 allow_origins=["*"]
@@ -349,7 +349,7 @@ wrangler deploy
 wrangler tail
 
 # 應該看到：
-# TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+# TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 ```
 
 ---
@@ -422,7 +422,7 @@ npm list recharts date-fns
 wrangler dev --log-level debug
 
 # 檢查後端是否可訪問
-curl -X POST https://token.blocktempo.ai/api/usage-log \
+curl -X POST https://tapi.blocktempo.ai/api/usage-log \
   -H "Content-Type: application/json" \
   -d '{"token_hash":"test","route":"/test","timestamp":123}'
 
@@ -561,7 +561,7 @@ Cloudflare Worker
 2. ✅ 暗夜模式完美支持
 3. ✅ 按鈕樣式修復
 4. ✅ Token 使用追蹤實現
-5. ✅ 環境變數配置（token.blocktempo.ai）
+5. ✅ 環境變數配置（tapi.blocktempo.ai）
 6. ✅ 本地測試腳本
 7. ✅ 完整文檔
 

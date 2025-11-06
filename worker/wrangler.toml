@@ -9,7 +9,7 @@ id = "c36cc6c8cc38473dad537a0ab016d83f"
 
 # 環境變數配置（生產環境）
 [vars]
-TOKEN_MANAGER_BACKEND = "https://token.blocktempo.ai"
+TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
 
 # 本地開發環境配置
 [env.dev]
