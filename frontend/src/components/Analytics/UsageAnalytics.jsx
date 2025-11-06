@@ -345,8 +345,32 @@ function UsageAnalytics() {
                     {recent_logs.map((log, index) => (
                       <tr key={index}>
                         <td>{new Date(log.used_at).toLocaleString('zh-TW')}</td>
-                        <td>{log.token_hash ? log.token_hash.substring(0, 12) + '...' : 'N/A'}</td>
-                        <td>{log.route_path}</td>
+                        <td>
+                          {log.token_id ? (
+                            <span 
+                              className="clickable-link"
+                              onClick={() => navigate(`/token-usage/${log.token_id}`)}
+                              title="點擊查看 Token 使用詳情"
+                              style={{ cursor: 'pointer', color: 'var(--accent-primary)', textDecoration: 'underline' }}
+                            >
+                              {log.token_name || log.token_hash?.substring(0, 12) + '...'}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-tertiary)' }}>
+                              {log.token_hash?.substring(0, 12) + '...' || 'N/A'}
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <span 
+                            className="clickable-link"
+                            onClick={() => navigate(`/route-usage?path=${encodeURIComponent(log.route_path)}`)}
+                            title="點擊查看路由統計"
+                            style={{ cursor: 'pointer', color: 'var(--accent-primary)', textDecoration: 'underline' }}
+                          >
+                            {log.route_path}
+                          </span>
+                        </td>
                         <td><span className="badge badge-info">{log.request_method}</span></td>
                         <td>
                           <span className={`badge ${log.response_status >= 200 && log.response_status < 300 ? 'badge-success' : 'badge-danger'}`}>

@@ -1157,18 +1157,21 @@ async def get_usage_stats(request: Request):
             LIMIT 10
         """)
         
-        # 5. 最近 100 條調用記錄
+        # 5. 最近 100 條調用記錄（JOIN tokens 獲取名稱）
         recent_logs = await conn.fetch("""
             SELECT 
-                token_hash,
-                route_path,
-                request_method,
-                response_status,
-                response_time_ms,
-                ip_address,
-                used_at
-            FROM token_usage_logs
-            ORDER BY used_at DESC
+                ul.token_hash,
+                t.id as token_id,
+                t.name as token_name,
+                ul.route_path,
+                ul.request_method,
+                ul.response_status,
+                ul.response_time_ms,
+                ul.ip_address,
+                ul.used_at
+            FROM token_usage_logs ul
+            LEFT JOIN tokens t ON ul.token_hash = t.token_hash
+            ORDER BY ul.used_at DESC
             LIMIT 100
         """)
     
@@ -1212,6 +1215,8 @@ async def get_usage_stats(request: Request):
         "recent_logs": [
             {
                 "token_hash": row['token_hash'],
+                "token_id": row['token_id'],
+                "token_name": row['token_name'],
                 "route_path": row['route_path'],
                 "request_method": row['request_method'],
                 "response_status": row['response_status'],
