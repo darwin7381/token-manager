@@ -351,7 +351,7 @@ function UsageAnalytics() {
                               className="clickable-link"
                               onClick={() => navigate(`/token-usage/${log.token_id}`)}
                               title="點擊查看 Token 使用詳情"
-                              style={{ cursor: 'pointer', color: 'var(--accent-primary)', textDecoration: 'underline' }}
+                              style={{ cursor: 'pointer', color: 'var(--accent-primary)' }}
                             >
                               {log.token_name || log.token_hash?.substring(0, 12) + '...'}
                             </span>
@@ -366,7 +366,7 @@ function UsageAnalytics() {
                             className="clickable-link"
                             onClick={() => navigate(`/route-usage?path=${encodeURIComponent(log.route_path)}`)}
                             title="點擊查看路由統計"
-                            style={{ cursor: 'pointer', color: 'var(--accent-primary)', textDecoration: 'underline' }}
+                            style={{ cursor: 'pointer', color: 'var(--accent-primary)' }}
                           >
                             {log.route_path}
                           </span>
