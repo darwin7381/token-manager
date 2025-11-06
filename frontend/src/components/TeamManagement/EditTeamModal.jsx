@@ -4,6 +4,8 @@ import { useAuth } from '@clerk/clerk-react';
 import { ROLES, getRoleInfo } from '../../constants/roles';
 import { usePermissions } from '../../hooks/usePermissions';
 
+const API_URL = import.meta.env.VITE_API_URL || '${API_URL}';
+
 export default function EditTeamModal({ team, onClose, onSave }) {
   const { getToken } = useAuth();
   const { getUserRoleInTeam, userId } = usePermissions();
@@ -35,7 +37,7 @@ export default function EditTeamModal({ team, onClose, onSave }) {
       setLoading(true);
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/teams/${team.id}/members`, {
+      const response = await fetch(`${API_URL}/api/teams/${team.id}/members`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -56,7 +58,7 @@ export default function EditTeamModal({ team, onClose, onSave }) {
   const fetchAllUsers = async () => {
     try {
       const token = await getToken();
-      const response = await fetch('http://localhost:8000/api/users', {
+      const response = await fetch('${API_URL}/api/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -90,7 +92,7 @@ export default function EditTeamModal({ team, onClose, onSave }) {
       setSaving(true);
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/users/${userId}/team-role`, {
+      const response = await fetch(`${API_URL}/api/users/${userId}/team-role`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -135,7 +137,7 @@ export default function EditTeamModal({ team, onClose, onSave }) {
       
       console.log('Removing member:', userId, 'from team:', team.id);
       
-      const response = await fetch(`http://localhost:8000/api/users/${userId}/team-membership/${team.id}`, {
+      const response = await fetch(`${API_URL}/api/users/${userId}/team-membership/${team.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -172,7 +174,7 @@ export default function EditTeamModal({ team, onClose, onSave }) {
       setSaving(true);
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/users/${selectedUserId}/team-membership`, {
+      const response = await fetch(`${API_URL}/api/users/${selectedUserId}/team-membership`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -385,7 +387,7 @@ export default function EditTeamModal({ team, onClose, onSave }) {
                       try {
                         setSaving(true);
                         const token = await getToken();
-                        const response = await fetch(`http://localhost:8000/api/users/${userId}/team-membership`, {
+                        const response = await fetch(`${API_URL}/api/users/${userId}/team-membership`, {
                           method: 'POST',
                           headers: {
                             'Authorization': `Bearer ${token}`,

@@ -4,6 +4,8 @@ import { ROLES, getRoleInfo } from '../../constants/roles';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useAuth } from '@clerk/clerk-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function EditUserModal({ user, onClose, onSave }) {
   const { getToken } = useAuth();
   const { getUserRoleInTeam, canEditUserInTeam, canRemoveUserFromTeam } = usePermissions();
@@ -33,7 +35,7 @@ export default function EditUserModal({ user, onClose, onSave }) {
   const fetchAllTeams = async () => {
     try {
       const token = await getToken();
-      const response = await fetch('http://localhost:8000/api/teams', {
+      const response = await fetch('${API_URL}/api/teams', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

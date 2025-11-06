@@ -5,6 +5,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 import CreateTeamModal from './CreateTeamModal';
 import EditTeamModal from './EditTeamModal';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function TeamManagement() {
   const { isAdmin } = usePermissions();
   const { getToken } = useAuth();
@@ -27,7 +29,7 @@ export default function TeamManagement() {
       
       const token = await getToken();
       
-      const response = await fetch('http://localhost:8000/api/teams', {
+      const response = await fetch(`${API_URL}/api/teams`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -52,7 +54,7 @@ export default function TeamManagement() {
     try {
       const token = await getToken();
       
-      const response = await fetch('http://localhost:8000/api/teams', {
+      const response = await fetch(`${API_URL}/api/teams`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -88,7 +90,7 @@ export default function TeamManagement() {
     try {
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/teams/${teamId}`, {
+      const response = await fetch(`${API_URL}/api/teams/${teamId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -120,7 +122,7 @@ export default function TeamManagement() {
     try {
       const token = await getToken();
       
-      const response = await fetch(`http://localhost:8000/api/teams/${team.id}`, {
+      const response = await fetch(`${API_URL}/api/teams/${team.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,

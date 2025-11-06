@@ -7,6 +7,8 @@ import { updateUserTeamRole, addUserToTeam, removeUserFromTeam } from '../../ser
 import EditUserModal from './EditUserModal';
 import InviteUserModal from './InviteUserModal';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function UserManagement() {
   const { canAccessUserManagement, isAdmin, getAllTeamRoles } = usePermissions();
   const { getToken } = useAuth();
@@ -27,7 +29,7 @@ export default function UserManagement() {
   const fetchTeams = async () => {
     try {
       const token = await getToken();
-      const response = await fetch('http://localhost:8000/api/teams', {
+      const response = await fetch('${API_URL}/api/teams', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -56,7 +58,7 @@ export default function UserManagement() {
       
       console.log('Fetching users...');
       
-      const response = await fetch('http://localhost:8000/api/users', {
+      const response = await fetch('${API_URL}/api/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -110,7 +112,7 @@ export default function UserManagement() {
       console.log('Action completed successfully');
       
       // 重新獲取用戶列表
-      const response = await fetch('http://localhost:8000/api/users', {
+      const response = await fetch('${API_URL}/api/users', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

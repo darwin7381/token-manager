@@ -4,6 +4,8 @@ import { useAuth } from '@clerk/clerk-react';
 import { ROLES, getRoleInfo } from '../../constants/roles';
 import { usePermissions } from '../../hooks/usePermissions';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function InviteUserModal({ onClose }) {
   const { getToken } = useAuth();
   const { getAllTeamRoles } = usePermissions();
@@ -24,7 +26,7 @@ export default function InviteUserModal({ onClose }) {
   const fetchTeams = async () => {
     try {
       const token = await getToken();
-      const response = await fetch('http://localhost:8000/api/teams', {
+      const response = await fetch('${API_URL}/api/teams', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -81,7 +83,7 @@ export default function InviteUserModal({ onClose }) {
       setInviting(true);
       
       const token = await getToken();
-      const response = await fetch('http://localhost:8000/api/invitations', {
+      const response = await fetch('${API_URL}/api/invitations', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
