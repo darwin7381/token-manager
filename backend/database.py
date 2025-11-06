@@ -518,3 +518,7 @@ class Database:
             )
             print(f"   ✅ Placeholder team created: {team_id}")
 
+
+# 全局數據庫實例
+db = Database()
+
