@@ -299,8 +299,222 @@ class Database:
             print("✅ Core Team created successfully")
         else:
             print("✓ Core Team already exists")
-
-
-# 全局數據庫實例
-db = Database()
+        
+        # ========== KV 到 PostgreSQL 同步 ==========
+        print("\n🔄 Checking for missing data from Cloudflare KV...")
+        await self.sync_missing_from_kv()
+    
+    async def sync_missing_from_kv(self):
+        """
+        從 Cloudflare KV 補足 PostgreSQL 缺失的數據
+        
+        策略：
+        - PostgreSQL 優先（已存在的不動）
+        - 只補足缺失的
+        - 自動處理團隊依賴
+        """
+        from cloudflare import get_cf_kv
+        from datetime import datetime
+        
+        cf_kv = get_cf_kv()
+        if cf_kv.is_dummy:
+            print("⏭️  Skipping KV sync (using dummy credentials)")
+            return
+        
+        try:
+            async with self.pool.acquire() as conn:
+                # ========== 1. 同步 Tokens ==========
+                print("🔍 Syncing tokens from KV...")
+                
+                # 1.1 獲取 PostgreSQL 現有的 token_hash
+                existing_tokens = await conn.fetch("SELECT token_hash FROM tokens")
+                existing_hash_set = {row['token_hash'] for row in existing_tokens}
+                print(f"   PostgreSQL has {len(existing_hash_set)} tokens")
+                
+                # 1.2 從 KV 列出所有 token keys
+                all_token_keys = []
+                cursor = None
+                
+                while True:
+                    result = await cf_kv.list_keys(prefix="token:", cursor=cursor)
+                    keys = result.get("keys", [])
+                    all_token_keys.extend([k["name"] for k in keys])
+                    
+                    cursor = result.get("cursor")
+                    if not cursor or result.get("list_complete"):
+                        break
+                
+                print(f"   KV has {len(all_token_keys)} tokens")
+                
+                # 1.3 找出缺失的 tokens
+                imported_count = 0
+                skipped_count = 0
+                
+                for key_name in all_token_keys:
+                    token_hash = key_name.replace("token:", "")
+                    
+                    if token_hash in existing_hash_set:
+                        skipped_count += 1
+                        continue
+                    
+                    # 1.4 從 KV 讀取數據
+                    kv_data = await cf_kv.get_value(key_name)
+                    if not kv_data:
+                        print(f"   ⚠️  Key {key_name} has no data, skipping")
+                        continue
+                    
+                    # 1.5 確保團隊存在
+                    team_id = kv_data.get('team_id', 'core-team')
+                    await self._ensure_team_exists(conn, team_id)
+                    
+                    # 1.6 插入 PostgreSQL
+                    try:
+                        # 解析時間
+                        created_at = None
+                        if kv_data.get('created_at'):
+                            try:
+                                created_at = datetime.fromisoformat(kv_data['created_at'].replace('Z', '+00:00'))
+                            except:
+                                created_at = datetime.utcnow()
+                        else:
+                            created_at = datetime.utcnow()
+                        
+                        expires_at = None
+                        if kv_data.get('expires_at'):
+                            try:
+                                expires_at = datetime.fromisoformat(kv_data['expires_at'].replace('Z', '+00:00'))
+                            except:
+                                pass
+                        
+                        await conn.execute("""
+                            INSERT INTO tokens 
+                            (token_hash, name, team_id, scopes, created_at, expires_at, 
+                             created_by, description, is_active, token_encrypted)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, NULL)
+                            ON CONFLICT (token_hash) DO NOTHING
+                        """, 
+                            token_hash,
+                            kv_data.get('name', 'Imported Token'),
+                            team_id,
+                            kv_data.get('scopes', ['*']),
+                            created_at,
+                            expires_at,
+                            'kv-import',  # 標記為從 KV 導入
+                            f"從 Cloudflare KV 自動導入 ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')})"
+                        )
+                        imported_count += 1
+                        print(f"   ✅ Imported token: {kv_data.get('name', 'Unknown')} ({token_hash[:8]}...)")
+                    
+                    except Exception as e:
+                        print(f"   ❌ Failed to import token {token_hash[:8]}: {e}")
+                        continue
+                
+                if imported_count > 0:
+                    print(f"✅ Token sync complete: {imported_count} imported, {skipped_count} skipped")
+                else:
+                    print(f"✓ All tokens in sync ({skipped_count} tokens checked)")
+                
+                # ========== 2. 同步 Routes ==========
+                print("\n🔍 Syncing routes from KV...")
+                
+                # 2.1 獲取 PostgreSQL 現有的路由
+                existing_routes = await conn.fetch("SELECT path FROM routes")
+                existing_paths = {row['path'] for row in existing_routes}
+                print(f"   PostgreSQL has {len(existing_paths)} routes")
+                
+                # 2.2 從 KV 讀取 routes
+                routes_data = await cf_kv.get_value("routes")
+                
+                if routes_data and isinstance(routes_data, dict):
+                    kv_routes = routes_data
+                    print(f"   KV has {len(kv_routes)} routes")
+                    
+                    # 2.3 補足缺失的路由
+                    route_imported = 0
+                    route_skipped = 0
+                    
+                    for path, route_config in kv_routes.items():
+                        if path in existing_paths:
+                            route_skipped += 1
+                            continue
+                        
+                        try:
+                            # 處理新舊格式
+                            if isinstance(route_config, str):
+                                # 舊格式：{"path": "url"}
+                                backend_url = route_config
+                                tags = []
+                                auth_type = 'none'
+                                auth_config = None
+                            elif isinstance(route_config, dict):
+                                # 新格式：{"url": "...", "tags": [...], "auth": {...}}
+                                backend_url = route_config.get('url', route_config.get('backend_url', ''))
+                                tags = route_config.get('tags', [])
+                                auth = route_config.get('auth', {})
+                                auth_type = auth.get('type', 'none') if auth else 'none'
+                                auth_config = auth.get('config') if auth else None
+                            else:
+                                print(f"   ⚠️  Invalid route config for {path}, skipping")
+                                continue
+                            
+                            # 插入路由
+                            await conn.execute("""
+                                INSERT INTO routes 
+                                (path, name, backend_url, description, tags, 
+                                 backend_auth_type, backend_auth_config, created_at)
+                                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                ON CONFLICT (path) DO NOTHING
+                            """,
+                                path,
+                                f"Imported: {path}",
+                                backend_url,
+                                f"從 Cloudflare KV 自動導入 ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')})",
+                                tags,
+                                auth_type,
+                                auth_config,
+                                datetime.utcnow()
+                            )
+                            route_imported += 1
+                            print(f"   ✅ Imported route: {path} → {backend_url}")
+                        
+                        except Exception as e:
+                            print(f"   ❌ Failed to import route {path}: {e}")
+                            continue
+                    
+                    if route_imported > 0:
+                        print(f"✅ Route sync complete: {route_imported} imported, {route_skipped} skipped")
+                    else:
+                        print(f"✓ All routes in sync ({route_skipped} routes checked)")
+                else:
+                    print("   ℹ️  No routes in KV")
+        
+        except Exception as e:
+            print(f"⚠️  KV sync encountered an error: {e}")
+            print("   Continuing with startup (sync is optional)...")
+            # 不拋出異常，允許服務正常啟動
+    
+    async def _ensure_team_exists(self, conn, team_id: str):
+        """
+        確保團隊存在，如果不存在則創建佔位團隊
+        """
+        from datetime import datetime
+        
+        team_exists = await conn.fetchval("""
+            SELECT EXISTS (SELECT 1 FROM teams WHERE id = $1)
+        """, team_id)
+        
+        if not team_exists:
+            print(f"   🔄 Creating placeholder team: {team_id}")
+            await conn.execute("""
+                INSERT INTO teams (id, name, description, color, icon, created_by)
+                VALUES ($1, $2, $3, $4, $5, $6)
+            """,
+                team_id,
+                f"Imported Team ({team_id})",
+                f"從 Cloudflare KV 自動導入的團隊 ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')})",
+                '#94a3b8',  # 灰色
+                '📦',
+                'kv-import'
+            )
+            print(f"   ✅ Placeholder team created: {team_id}")
 

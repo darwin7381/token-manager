@@ -112,6 +112,81 @@ class CloudflareKV:
             
             if response.status_code not in [200, 201]:
                 raise Exception(f"Failed to store secret to Cloudflare KV: {response.text}")
+    
+    async def list_keys(self, prefix: str = "", limit: int = 1000, cursor: str = None):
+        """
+        列出 KV 中的 keys
+        
+        Args:
+            prefix: Key 前綴（如 "token:" 或 "route:"）
+            limit: 每頁數量（最大 1000）
+            cursor: 分頁游標
+        
+        Returns:
+            {
+                "keys": [...],
+                "cursor": "next_cursor" or None,
+                "list_complete": True/False
+            }
+        """
+        if self.is_dummy:
+            print(f"🔸 [DUMMY] Would list keys with prefix '{prefix}'")
+            return {"keys": [], "cursor": None, "list_complete": True}
+        
+        url = f"{self.base_url}/keys"
+        params = {"limit": limit}
+        if prefix:
+            params["prefix"] = prefix
+        if cursor:
+            params["cursor"] = cursor
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers=self.headers,
+                params=params,
+                timeout=30.0
+            )
+            
+            if response.status_code != 200:
+                raise Exception(f"Failed to list KV keys: {response.text}")
+            
+            data = response.json()
+            return data.get("result", {"keys": [], "cursor": None, "list_complete": True})
+    
+    async def get_value(self, key: str):
+        """
+        從 KV 讀取值
+        
+        Args:
+            key: 完整的 key（如 "token:abc123" 或 "routes"）
+        
+        Returns:
+            dict or None
+        """
+        if self.is_dummy:
+            print(f"🔸 [DUMMY] Would get value for key '{key}'")
+            return None
+        
+        url = f"{self.base_url}/values/{key}"
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                url,
+                headers=self.headers,
+                timeout=30.0
+            )
+            
+            if response.status_code == 404:
+                return None
+            
+            if response.status_code != 200:
+                raise Exception(f"Failed to get KV value: {response.text}")
+            
+            try:
+                return response.json()
+            except:
+                return response.text
 
 
 # 全局 Cloudflare KV 實例 (懶加載)
