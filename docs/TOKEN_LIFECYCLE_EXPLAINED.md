@@ -445,3 +445,42 @@ expires_days = None → expires_at = NULL → 永不過期
 
 你決定吧！要現在實施，還是先測試目前的功能？
 
+
+---
+
+## 🔄 KV 反向同步機制（2025-11-06 新增）
+
+### **為什麼需要反向同步？**
+
+**場景：** 本地開發時創建的 Token 已同步到 Cloudflare KV，但首次部署時生產 PostgreSQL 是空的。
+
+**後果：**
+- Worker 可以驗證這些 Token（從 KV 讀取）✅
+- 但前端看不到（從 PostgreSQL 讀取）❌
+- 無法管理這些「幽靈」Token ❌
+
+### **解決方案：啟動時補足**
+
+後端啟動時自動從 KV 補足 PostgreSQL 缺失的數據：
+
+```python
+# backend/database.py
+async def sync_missing_from_kv(self):
+    # 只補足缺失的，不覆蓋現有的
+    # PostgreSQL 優先（Source of Truth）
+```
+
+### **同步內容**
+
+1. **Tokens**: 從 KV 的 `token:*` keys
+2. **Routes**: 從 KV 的 `routes` key
+3. **Teams**: 從 Clerk 用戶 metadata
+
+### **實施細節**
+
+參考 `READY_FOR_DEPLOYMENT.md` 中的「KV 反向同步機制」章節。
+
+---
+
+**文件版本**: 2.1  
+**最後更新**: 2025-11-06
