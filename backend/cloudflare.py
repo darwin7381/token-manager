@@ -152,7 +152,14 @@ class CloudflareKV:
                 raise Exception(f"Failed to list KV keys: {response.text}")
             
             data = response.json()
-            return data.get("result", {"keys": [], "cursor": None, "list_complete": True})
+            result = data.get("result", [])
+            result_info = data.get("result_info", {})
+            
+            return {
+                "keys": result,  # result 是 list of {name: "key"}
+                "cursor": result_info.get("cursor"),
+                "list_complete": result_info.get("cursor") is None
+            }
     
     async def get_value(self, key: str):
         """
