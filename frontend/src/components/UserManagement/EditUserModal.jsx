@@ -35,7 +35,7 @@ export default function EditUserModal({ user, onClose, onSave }) {
   const fetchAllTeams = async () => {
     try {
       const token = await getToken();
-      const response = await fetch('${API_URL}/api/teams', {
+      const response = await fetch(`${API_URL}/api/teams', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

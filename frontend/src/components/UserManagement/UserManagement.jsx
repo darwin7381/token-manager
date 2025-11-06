@@ -29,7 +29,7 @@ export default function UserManagement() {
   const fetchTeams = async () => {
     try {
       const token = await getToken();
-      const response = await fetch('${API_URL}/api/teams', {
+      const response = await fetch(`${API_URL}/api/teams`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -58,7 +58,7 @@ export default function UserManagement() {
       
       console.log('Fetching users...');
       
-      const response = await fetch('${API_URL}/api/users', {
+      const response = await fetch(`${API_URL}/api/users`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -112,7 +112,7 @@ export default function UserManagement() {
       console.log('Action completed successfully');
       
       // 重新獲取用戶列表
-      const response = await fetch('${API_URL}/api/users', {
+      const response = await fetch(`${API_URL}/api/users`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

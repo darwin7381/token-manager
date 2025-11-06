@@ -26,7 +26,7 @@ export default function InviteUserModal({ onClose }) {
   const fetchTeams = async () => {
     try {
       const token = await getToken();
-      const response = await fetch('${API_URL}/api/teams', {
+      const response = await fetch(`${API_URL}/api/teams', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -83,7 +83,7 @@ export default function InviteUserModal({ onClose }) {
       setInviting(true);
       
       const token = await getToken();
-      const response = await fetch('${API_URL}/api/invitations', {
+      const response = await fetch(`${API_URL}/api/invitations', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
