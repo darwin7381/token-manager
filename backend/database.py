@@ -363,9 +363,9 @@ class Database:
                         print(f"   ⚠️  Key {key_name} has no data, skipping")
                         continue
                     
-                    # 1.5 確保團隊存在
+                    # 1.5 確保團隊存在（從 Clerk 同步）
                     team_id = kv_data.get('team_id', 'core-team')
-                    await self._ensure_team_exists(conn, team_id)
+                    team_id = await self._ensure_team_from_clerk(conn, team_id)
                     
                     # 1.6 插入 PostgreSQL
                     try:
@@ -493,30 +493,98 @@ class Database:
             print("   Continuing with startup (sync is optional)...")
             # 不拋出異常，允許服務正常啟動
     
-    async def _ensure_team_exists(self, conn, team_id: str):
+    async def _ensure_team_from_clerk(self, conn, team_id: str) -> str:
         """
-        確保團隊存在，如果不存在則創建佔位團隊
+        確保團隊存在，從 Clerk 同步團隊資訊
+        
+        Returns:
+            實際使用的 team_id（如果不存在則返回 'core-team'）
         """
         from datetime import datetime
+        from clerk_backend_api import Clerk
+        import os
         
+        # 1. 檢查 PostgreSQL 是否已有此團隊
         team_exists = await conn.fetchval("""
             SELECT EXISTS (SELECT 1 FROM teams WHERE id = $1)
         """, team_id)
         
-        if not team_exists:
-            print(f"   🔄 Creating placeholder team: {team_id}")
+        if team_exists:
+            return team_id  # 已存在，直接返回
+        
+        # 2. 從 Clerk 查詢此團隊的資訊
+        print(f"   🔍 Team '{team_id}' not in PostgreSQL, checking Clerk...")
+        
+        try:
+            clerk_secret = os.getenv("CLERK_SECRET_KEY")
+            if not clerk_secret:
+                print(f"   ⚠️  CLERK_SECRET_KEY not set, using core-team")
+                return 'core-team'
+            
+            clerk = Clerk(bearer_auth=clerk_secret)
+            
+            # 遍歷用戶找到此團隊的資訊
+            users_response = clerk.users.list(request={})
+            users = users_response.data
+            
+            team_info = None
+            team_members = []
+            
+            for user in users:
+                metadata = user.public_metadata or {}
+                team_roles = metadata.get('tokenManager:teamRoles', {})
+                
+                if team_id in team_roles:
+                    team_members.append({
+                        'user_id': user.id,
+                        'role': team_roles[team_id]
+                    })
+                    
+                    # 嘗試獲取團隊名稱（如果 metadata 中有）
+                    teams_list = metadata.get('tokenManager:teams', [])
+                    for t in teams_list:
+                        if isinstance(t, dict) and t.get('id') == team_id:
+                            team_info = t
+                            break
+            
+            if not team_members:
+                # Clerk 中沒有此團隊
+                print(f"   ⚠️  Team '{team_id}' not found in Clerk, using core-team")
+                return 'core-team'
+            
+            # 3. 從 Clerk 找到了團隊，創建到 PostgreSQL
+            team_name = team_info.get('name', f'Team {team_id}') if team_info else f'Team {team_id}'
+            team_description = f"從 Clerk 同步的團隊（{len(team_members)} 個成員）"
+            team_color = team_info.get('color', '#3b82f6') if team_info else '#3b82f6'
+            team_icon = team_info.get('icon', '👥') if team_info else '👥'
+            
+            # 找出創建者（第一個 ADMIN）
+            creator = 'system'
+            for member in team_members:
+                if member['role'] == 'ADMIN':
+                    creator = member['user_id']
+                    break
+            
             await conn.execute("""
-                INSERT INTO teams (id, name, description, color, icon, created_by)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO teams (id, name, description, color, icon, created_by, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
             """,
                 team_id,
-                f"Imported Team ({team_id})",
-                f"從 Cloudflare KV 自動導入的團隊 ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')})",
-                '#94a3b8',  # 灰色
-                '📦',
-                'kv-import'
+                team_name,
+                team_description,
+                team_color,
+                team_icon,
+                creator,
+                datetime.utcnow()
             )
-            print(f"   ✅ Placeholder team created: {team_id}")
+            
+            print(f"   ✅ Synced team from Clerk: {team_name} ({team_id}) with {len(team_members)} members")
+            return team_id
+        
+        except Exception as e:
+            print(f"   ❌ Failed to sync team from Clerk: {e}")
+            print(f"   → Using core-team as fallback")
+            return 'core-team'
 
 
 # 全局數據庫實例
