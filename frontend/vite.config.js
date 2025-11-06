@@ -20,5 +20,10 @@ export default defineConfig({
         secure: true,
       }
     }
+  },
+  preview: {
+    port: 4173,
+    host: '0.0.0.0',
+    allowedHosts: ['token.blocktempo.ai', 'localhost']
   }
 })
