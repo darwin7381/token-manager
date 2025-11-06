@@ -8,12 +8,16 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // 本地開發：http://localhost:8000
+        // 生產測試：https://tapi.blocktempo.ai
+        target: 'https://tapi.blocktempo.ai',
         changeOrigin: true,
+        secure: true,
       },
       '/health': {
-        target: 'http://localhost:8000',
+        target: 'https://tapi.blocktempo.ai',
         changeOrigin: true,
+        secure: true,
       }
     }
   }
