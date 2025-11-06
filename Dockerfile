@@ -22,9 +22,13 @@ RUN pip install -r requirements.txt
 # 複製整個 backend 目錄
 COPY backend/ .
 
+# 複製啟動腳本
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # 暴露端口（Railway 會自動設置 $PORT 環境變數）
 EXPOSE 8000
 
-# 啟動命令（使用 exec 形式避免 shell 問題）
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# 使用啟動腳本
+CMD ["/app/start.sh"]
 
