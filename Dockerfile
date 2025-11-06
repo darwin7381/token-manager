@@ -14,9 +14,8 @@ RUN uv pip install --system -r requirements.txt
 # 複製應用代碼
 COPY backend/ .
 
-# 設置端口
-ENV PORT=8000
+# 暴露端口
 EXPOSE 8000
 
-# 啟動命令
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 啟動命令（Railway 會自動設置 PORT 環境變數）
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
