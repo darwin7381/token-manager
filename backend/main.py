@@ -1127,15 +1127,15 @@ async def get_usage_stats(request: Request):
         # 3. Top 10 最常使用的 Token
         top_tokens = await conn.fetch("""
             SELECT 
+                t.id,
                 t.token_hash,
                 t.name,
                 t.team_id,
                 COUNT(ul.id) as usage_count,
                 MAX(ul.used_at) as last_used
             FROM tokens t
-            LEFT JOIN token_usage_logs ul ON t.token_hash = ul.token_hash
-            WHERE ul.used_at >= NOW() - INTERVAL '7 days'
-            GROUP BY t.token_hash, t.name, t.team_id
+            INNER JOIN token_usage_logs ul ON t.token_hash = ul.token_hash AND ul.used_at >= NOW() - INTERVAL '7 days'
+            GROUP BY t.id, t.token_hash, t.name, t.team_id
             ORDER BY usage_count DESC
             LIMIT 10
         """)
@@ -1174,6 +1174,7 @@ async def get_usage_stats(request: Request):
         ],
         "top_tokens": [
             {
+                "id": row['id'],
                 "name": row['name'],
                 "team_id": row['team_id'],
                 "usage_count": row['usage_count'],
