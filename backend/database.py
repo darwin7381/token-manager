@@ -525,7 +525,8 @@ class Database:
             
             # 遍歷用戶找到此團隊的資訊
             users_response = clerk.users.list(request={})
-            users = users_response.data
+            # Clerk API 直接返回 list，不是 .data
+            users = users_response if isinstance(users_response, list) else users_response.data
             
             team_info = None
             team_members = []
