@@ -304,6 +304,26 @@ else:
 safe_dict['key'] = 'value'
 ```
 
+### 延伸問題：嵌套 dict 的深層複製
+
+**即使外層已經轉換，嵌套的 dict 仍然可能是引用！**
+
+```python
+# ❌ 錯誤：淺複製
+target_metadata = dict(user.public_metadata)
+team_roles = target_metadata.get('teamRoles', {})  # ← 仍是引用！
+team_roles['new-team'] = 'ADMIN'  # ← 修改了原始物件！
+
+# ✅ 正確：深層複製
+target_metadata = dict(user.public_metadata)
+team_roles = dict(target_metadata.get('teamRoles', {}))  # ← 複製一份！
+team_roles['new-team'] = 'ADMIN'  # ← 修改副本
+```
+
+**影響：**
+- 批量操作時，第一次修改會污染原始物件
+- 後續操作會失敗或產生 `[object Object]` 錯誤
+
 ---
 
 ## 📋 其他嚴重錯誤（待記錄）
