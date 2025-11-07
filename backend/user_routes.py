@@ -93,8 +93,16 @@ async def update_team_role(
     
     # === 3. 獲取目標用戶信息 ===
     try:
+        import json
         target_user = clerk_client.users.get(user_id=user_id)
-        target_metadata = dict(target_user.public_metadata or {})
+        # 安全地轉換 public_metadata
+        if target_user.public_metadata:
+            if isinstance(target_user.public_metadata, dict):
+                target_metadata = dict(target_user.public_metadata)
+            else:
+                target_metadata = json.loads(json.dumps(target_user.public_metadata))
+        else:
+            target_metadata = {}
         target_team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
         target_role_in_team = target_team_roles.get(data.team_id)
     except Exception as e:
@@ -204,8 +212,16 @@ async def add_user_to_team(
     
     # === 4. 獲取目標用戶並添加到團隊 ===
     try:
+        import json
         target_user = clerk_client.users.get(user_id=user_id)
-        target_metadata = dict(target_user.public_metadata or {})
+        # 安全地轉換 public_metadata
+        if target_user.public_metadata:
+            if isinstance(target_user.public_metadata, dict):
+                target_metadata = dict(target_user.public_metadata)
+            else:
+                target_metadata = json.loads(json.dumps(target_user.public_metadata))
+        else:
+            target_metadata = {}
         team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
         
         # 檢查是否已在團隊
@@ -271,8 +287,16 @@ async def remove_user_from_team(
     
     # === 2. 獲取目標用戶 ===
     try:
+        import json
         target_user = clerk_client.users.get(user_id=user_id)
-        target_metadata = dict(target_user.public_metadata or {})
+        # 安全地轉換 public_metadata
+        if target_user.public_metadata:
+            if isinstance(target_user.public_metadata, dict):
+                target_metadata = dict(target_user.public_metadata)
+            else:
+                target_metadata = json.loads(json.dumps(target_user.public_metadata))
+        else:
+            target_metadata = {}
         team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
         target_role_in_team = team_roles.get(team_id)
         
@@ -293,8 +317,8 @@ async def remove_user_from_team(
         # Clerk 的 update_metadata 是 merge 行為
         # 要刪除 nested key，必須設置為 null
         
-        # 獲取完整的現有 metadata
-        current_metadata = dict(target_user.public_metadata or {})
+        # 獲取完整的現有 metadata（已在上面轉換過）
+        current_metadata = target_metadata
         current_team_roles = current_metadata.get(f"{NAMESPACE}:teamRoles", {})
         
         print(f"🔍 Current teamRoles: {current_team_roles}")

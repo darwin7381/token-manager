@@ -127,15 +127,25 @@ async def create_team(
     from clerk_auth import clerk_client, get_all_user_team_roles
     
     try:
+        import json
         # 獲取創建者的當前 teamRoles
         creator = clerk_client.users.get(user_id=current_user["id"])
-        team_roles = dict(creator.public_metadata or {}).get(f"{NAMESPACE}:teamRoles", {})
+        # 安全地轉換 public_metadata
+        if creator.public_metadata:
+            if isinstance(creator.public_metadata, dict):
+                creator_metadata = dict(creator.public_metadata)
+            else:
+                creator_metadata = json.loads(json.dumps(creator.public_metadata))
+        else:
+            creator_metadata = {}
+        
+        team_roles = creator_metadata.get(f"{NAMESPACE}:teamRoles", {})
         
         # 添加新團隊的 ADMIN 角色
         team_roles[data.id] = "ADMIN"
         
         # 更新 metadata
-        updated_metadata = dict(creator.public_metadata or {})
+        updated_metadata = creator_metadata.copy()
         updated_metadata[f"{NAMESPACE}:teamRoles"] = team_roles
         
         clerk_client.users.update_metadata(
