@@ -234,14 +234,11 @@ async def add_user_to_team(
             target_metadata = {}
         team_roles = dict(target_metadata.get(f"{NAMESPACE}:teamRoles", {}))  # 複製一份！
         
-        # 檢查是否已在團隊
+        # 檢查是否已在團隊（如果已在，更新角色而不是報錯）
         if data.team_id in team_roles:
-            raise HTTPException(
-                status_code=400,
-                detail=f"User is already a member of team: {data.team_id}"
-            )
+            print(f"⚠️  User already in team {data.team_id}, updating role from {team_roles[data.team_id]} to {data.role}")
         
-        # 添加到團隊
+        # 添加或更新團隊角色
         team_roles[data.team_id] = data.role
         
         updated_metadata = target_metadata.copy()
