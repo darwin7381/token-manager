@@ -38,13 +38,23 @@ async def list_users(current_user: Dict[str, Any] = Depends(verify_clerk_token))
             if user.email_addresses and len(user.email_addresses) > 0:
                 primary_email = user.email_addresses[0].email_address if hasattr(user.email_addresses[0], 'email_address') else str(user.email_addresses[0])
             
+            # 安全地轉換 public_metadata
+            import json
+            if user.public_metadata:
+                if isinstance(user.public_metadata, dict):
+                    safe_metadata = dict(user.public_metadata)
+                else:
+                    safe_metadata = json.loads(json.dumps(user.public_metadata))
+            else:
+                safe_metadata = {}
+            
             users.append({
                 "id": user.id,
                 "email": primary_email,
                 "firstName": user.first_name,
                 "lastName": user.last_name,
                 "imageUrl": user.image_url,
-                "publicMetadata": user.public_metadata or {},
+                "publicMetadata": safe_metadata,
                 "createdAt": user.created_at,
                 "lastSignInAt": user.last_sign_in_at
             })
