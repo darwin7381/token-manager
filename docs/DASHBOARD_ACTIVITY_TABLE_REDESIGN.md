@@ -1,5 +1,24 @@
 # Dashboard 最近活動表格化重設計
 
+> ⚠️ **極度重要：JSONB 欄位處理錯誤教訓**  
+> 在處理 PostgreSQL 的 JSONB 欄位時，**絕對不能直接修改從資料庫查詢返回的 dict 物件**。
+> 必須先轉換成新的 Python dict，否則會導致嚴重的運行時錯誤，造成整個 Dashboard API 崩潰。
+> 
+> **錯誤做法：**
+> ```python
+> log_dict = dict(log)  # log['details'] 仍是 JSONB 物件
+> details = log_dict.get('details')  # JSONB 物件
+> details['name'] = 'xxx'  # ❌ 錯誤！會導致崩潰
+> log_dict['details'] = details
+> ```
+> 
+> **正確做法：**
+> ```python
+> details = dict(log['details']) if isinstance(log['details'], dict) else json.loads(log['details'])
+> details['name'] = 'xxx'  # ✅ 正確！這是新的 dict
+> log_dict['details'] = details
+> ```
+
 ## 改進概述
 
 根據用戶反饋，將 Dashboard 的「最近活動」從卡片式列表重新設計為表格式佈局，參考「詳細調用記錄」的設計風格。

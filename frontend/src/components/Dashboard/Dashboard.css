@@ -293,6 +293,24 @@
   color: var(--text-primary);
 }
 
+.activity-name-link {
+  font-weight: 600;
+  color: var(--accent-primary);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.activity-name-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.activity-name-deleted {
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
 .activity-info {
   color: var(--text-secondary);
   font-size: 0.8125rem;

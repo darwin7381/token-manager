@@ -408,7 +408,9 @@ function StatCard({ icon, title, value, color, trend }) {
   );
 }
 
-function ActivityRow({ log, tokensMap, routesMap }) {
+function ActivityRow({ log }) {
+  const navigate = useNavigate();
+  
   const getActionBadge = (action) => {
     const styles = {
       'create': { class: 'action-create', text: '創建' },
@@ -438,24 +440,8 @@ function ActivityRow({ log, tokensMap, routesMap }) {
   // 提取詳細資訊
   const details = log.details || {};
   
-  // 處理名稱：優先使用 details.name，否則從映射表查找
-  let name = details.name;
-  
-  if (!name && log.entity_id) {
-    if (log.entity_type === 'token') {
-      name = tokensMap[log.entity_id];  // 從 tokens 映射查找
-    } else if (log.entity_type === 'route') {
-      name = routesMap[log.entity_id];  // 從 routes 映射查找
-    }
-  }
-  
-  // 如果還是沒有，使用 path 或顯示未命名
-  if (!name && details.path) {
-    name = details.path;
-  }
-  if (!name) {
-    name = '未命名';
-  }
+  // 後端已經通過 LEFT JOIN 補充了名稱到 details.name
+  let name = details.name || details.path || '已刪除的資源';
   
   const teamName = details.team_name;
   const path = details.path;
@@ -467,10 +453,64 @@ function ActivityRow({ log, tokensMap, routesMap }) {
   // 組合相關資訊
   const getRelatedInfo = () => {
     const info = [];
-    if (teamName) info.push(`團隊: ${teamName}`);
-    if (path) info.push(`路徑: ${path}`);
-    if (scopes && scopes.length > 0) info.push(`範圍: ${scopes.join(', ')}`);
+    
+    // Token 相關資訊
+    if (log.entity_type === 'token') {
+      if (teamName) info.push(`團隊: ${teamName}`);
+      if (scopes && scopes.length > 0) {
+        const scopeText = scopes.length > 3 
+          ? `${scopes.slice(0, 3).join(', ')}...` 
+          : scopes.join(', ');
+        info.push(`範圍: ${scopeText}`);
+      }
+      if (details.description) info.push(`備註: ${details.description}`);
+    }
+    
+    // Route 相關資訊
+    if (log.entity_type === 'route') {
+      if (path) info.push(`路徑: ${path}`);
+      if (details.backend_url) info.push(`後端: ${details.backend_url}`);
+      if (details.tags && details.tags.length > 0) info.push(`標籤: ${details.tags.join(', ')}`);
+    }
+    
     return info.length > 0 ? info.join(' | ') : '-';
+  };
+
+  // 渲染可點擊的資源名稱
+  const renderResourceName = () => {
+    // 如果沒有 entity_id，資源可能已被刪除
+    if (!log.entity_id) {
+      return <span className="activity-name-deleted">{name}</span>;
+    }
+    
+    // Token：點擊查看 Token 使用詳情
+    if (log.entity_type === 'token') {
+      return (
+        <span 
+          className="activity-name-link"
+          onClick={() => navigate(`/token-usage/${log.entity_id}`)}
+          title="點擊查看 Token 使用詳情"
+        >
+          {name}
+        </span>
+      );
+    }
+    
+    // Route：點擊查看路由使用統計
+    if (log.entity_type === 'route' && path) {
+      return (
+        <span 
+          className="activity-name-link"
+          onClick={() => navigate(`/route-usage?path=${encodeURIComponent(path)}`)}
+          title="點擊查看路由使用統計"
+        >
+          {name}
+        </span>
+      );
+    }
+    
+    // 其他類型：不可點擊
+    return <span className="activity-name">{name}</span>;
   };
 
   return (
@@ -480,7 +520,7 @@ function ActivityRow({ log, tokensMap, routesMap }) {
       </td>
       <td>{getActionBadge(log.action)}</td>
       <td>{getEntityBadge(log.entity_type)}</td>
-      <td className="activity-name">{name}</td>
+      <td>{renderResourceName()}</td>
       <td className="activity-info">{getRelatedInfo()}</td>
       <td className="activity-operator">{operator}</td>
     </tr>
