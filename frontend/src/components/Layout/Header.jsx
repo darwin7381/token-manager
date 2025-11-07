@@ -115,7 +115,7 @@ export default function Header() {
               <div className="dropdown-divider" />
               <div 
                 className="dropdown-item"
-                onClick={() => window.open('http://localhost:8000/docs', '_blank')}
+                onClick={() => window.open(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/docs`, '_blank')}
               >
                 <FileText size={16} />
                 <span>API 文檔</span>

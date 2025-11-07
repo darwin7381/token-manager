@@ -58,7 +58,7 @@ async def invite_user(
         invitation = clerk_client.invitations.create(
             request={
                 "email_address": data.email,
-                "redirect_url": "http://localhost:5173",  # 前端 URL
+                "redirect_url": os.getenv("FRONTEND_URL", "http://localhost:5173"),  # 從環境變數讀取
                 "public_metadata": {
                     f"{NAMESPACE}:teamRoles": data.team_roles,
                     f"{NAMESPACE}:invitedBy": current_user["id"],

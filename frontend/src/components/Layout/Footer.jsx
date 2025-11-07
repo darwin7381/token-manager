@@ -12,7 +12,7 @@ export default function Footer() {
         <a href="https://github.com" className="footer-link" target="_blank" rel="noopener noreferrer">
           GitHub
         </a>
-        <a href="http://localhost:8000/docs" className="footer-link" target="_blank" rel="noopener noreferrer">
+        <a href={`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/docs`} className="footer-link" target="_blank" rel="noopener noreferrer">
           API 文檔
         </a>
         <a href="https://api-gateway.cryptoxlab.workers.dev" className="footer-link" target="_blank" rel="noopener noreferrer">

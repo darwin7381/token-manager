@@ -36,13 +36,14 @@ async def verify_clerk_token(request: Request) -> Dict[str, Any]:
         
         print(f"🔍 Authenticating request to: {request.url}")
         
+        # 從環境變數讀取允許的前端域名
+        allowed_origins = os.getenv('ALLOWED_FRONTEND_ORIGINS', 'http://localhost:5173,https://token.blocktempo.ai')
+        authorized_parties = [origin.strip() for origin in allowed_origins.split(',')]
+        
         request_state = clerk_client.authenticate_request(
             httpx_request,
             AuthenticateRequestOptions(
-                authorized_parties=[
-                    'http://localhost:5173',  # 本地開發
-                    'https://token.blocktempo.ai'  # 生產前端
-                ]
+                authorized_parties=authorized_parties
             )
         )
         
