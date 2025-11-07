@@ -148,6 +148,164 @@ curl https://tapi.blocktempo.ai/api/dashboard/overview \
 
 ---
 
+---
+
+## ❌ 錯誤 #2: Clerk API public_metadata 物件轉換錯誤（2025-11-07）
+
+### 嚴重程度
+🔴 **極度嚴重** - 導致用戶管理功能完全失效，錯誤訊息 `[object Object]`
+
+### 問題描述
+
+在用戶管理頁面，當嘗試編輯用戶權限或批量設置角色時，出現 `[object Object]` 錯誤，導致操作失敗。
+
+### 錯誤代碼
+
+```python
+# backend/user_routes.py, team_routes.py
+
+# ❌ 錯誤的做法
+target_user = clerk_client.users.get(user_id=user_id)
+target_metadata = dict(target_user.public_metadata or {})  # ❌ Clerk 物件可能無法直接 dict()
+team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+
+updated_metadata[f"{NAMESPACE}:teamRoles"] = team_roles
+clerk_client.users.update_metadata(
+    user_id=user_id,
+    public_metadata=updated_metadata  # ❌ 傳遞了未正確轉換的物件
+)
+```
+
+### 錯誤現象
+
+```
+前端錯誤訊息:
+  ❌ 批量設置失敗：[object Object]
+  ❌ 操作失敗：[object Object]
+
+瀏覽器 Console:
+  ❌ Error: [object Object]
+  ❌ Failed to bulk set role: Error: [object Object]
+
+後端可能返回:
+  422 Unprocessable Entity
+  或其他 Clerk API 錯誤
+```
+
+### 根本原因
+
+**Clerk SDK 返回的 `user.public_metadata` 可能是特殊的物件，不是純 Python dict。**
+
+使用 `dict()` 直接轉換可能：
+1. 無法正確轉換（保留了內部引用）
+2. 轉換後的物件無法序列化為 JSON
+3. 傳遞給 Clerk API 時被拒絕
+
+### 正確做法
+
+```python
+# ✅ 正確的做法
+import json
+
+target_user = clerk_client.users.get(user_id=user_id)
+
+# 安全地轉換 public_metadata
+if target_user.public_metadata:
+    if isinstance(target_user.public_metadata, dict):
+        target_metadata = dict(target_user.public_metadata)
+    else:
+        # 通過 JSON 序列化/反序列化確保是純 dict
+        target_metadata = json.loads(json.dumps(target_user.public_metadata))
+else:
+    target_metadata = {}
+
+team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+# ... 修改 team_roles ...
+
+updated_metadata = target_metadata.copy()
+updated_metadata[f"{NAMESPACE}:teamRoles"] = team_roles
+
+clerk_client.users.update_metadata(
+    user_id=user_id,
+    public_metadata=updated_metadata  # ✅ 純 Python dict
+)
+```
+
+### 受影響的檔案
+
+1. **backend/user_routes.py**（3 處）
+   - `update_user_team_role()` - 更新用戶團隊角色
+   - `add_user_to_team()` - 添加用戶到團隊
+   - `remove_user_from_team()` - 從團隊移除用戶
+
+2. **backend/team_routes.py**（1 處）
+   - `create_team()` - 創建團隊時添加創建者為 ADMIN
+
+### 關鍵點
+
+1. **永遠檢查物件類型**：`isinstance(obj, dict)`
+2. **使用 JSON 序列化確保純淨**：`json.loads(json.dumps(obj))`
+3. **不要假設 SDK 返回的是 Python 原生類型**
+4. **Clerk API 對 metadata 格式要求嚴格**
+
+### 影響範圍
+
+- ❌ 無法編輯用戶權限
+- ❌ 無法批量設置角色
+- ❌ 無法添加用戶到團隊
+- ❌ 無法從團隊移除用戶
+- ❌ 無法創建新團隊
+
+### 預防措施
+
+1. **代碼審查檢查清單**：
+   - [ ] 是否使用了第三方 SDK 返回的物件？
+   - [ ] 是否先驗證物件類型？
+   - [ ] 是否安全地轉換為 Python 原生類型？
+
+2. **測試要點**：
+   - 測試用戶權限編輯功能
+   - 測試批量操作
+   - 檢查錯誤訊息是否清晰（不是 `[object Object]`）
+
+### 修復時間軸
+
+| 時間 | 事件 |
+|------|------|
+| 16:30 | 用戶報告權限編輯功能出現 `[object Object]` 錯誤 |
+| 16:35 | 定位到 public_metadata 轉換問題 |
+| 16:40 | 修復所有受影響的函數（4 處）|
+| 16:45 | 提交並部署 |
+
+**總耗時**: 15 分鐘的功能中斷
+
+### 相關錯誤
+
+這個錯誤與 **錯誤 #1（JSONB 處理）** 類似，都是：
+- ✅ 從外部來源（PostgreSQL / Clerk API）獲取的物件
+- ✅ 不能直接當作 Python dict 修改
+- ✅ 需要安全地轉換為純 Python 類型
+
+### 通用原則
+
+**處理任何外部 API 或資料庫返回的物件時：**
+
+```python
+import json
+
+# 1. 檢查類型
+if isinstance(obj, dict):
+    safe_dict = dict(obj)
+else:
+    # 2. 通過 JSON 確保純淨
+    safe_dict = json.loads(json.dumps(obj))
+
+# 3. 現在可以安全修改
+safe_dict['key'] = 'value'
+```
+
+---
+
 ## 📋 其他嚴重錯誤（待記錄）
 
 （未來如有其他嚴重錯誤，記錄在此）
