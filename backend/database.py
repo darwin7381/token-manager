@@ -299,7 +299,7 @@ class Database:
             print("✅ Core Team created successfully")
         else:
             print("✓ Core Team already exists")
-        
+
         # ========== KV 到 PostgreSQL 同步 ==========
         print("\n🔄 Checking for missing data from Cloudflare KV...")
         await self.sync_missing_from_kv()

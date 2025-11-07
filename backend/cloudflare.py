@@ -112,7 +112,7 @@ class CloudflareKV:
             
             if response.status_code not in [200, 201]:
                 raise Exception(f"Failed to store secret to Cloudflare KV: {response.text}")
-    
+
     async def list_keys(self, prefix: str = "", limit: int = 1000, cursor: str = None):
         """
         列出 KV 中的 keys

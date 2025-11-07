@@ -161,52 +161,52 @@ function UsageAnalytics() {
       <div className="charts-section">
         {/* 第一行：24 小時調用趨勢（2/3）+ 路由使用分佈（1/3） */}
         <div className="charts-row">
-          {/* 24 小時調用趨勢 */}
+        {/* 24 小時調用趨勢 */}
           <div className="chart-card" style={{ flex: '2' }}>
-            <div className="chart-header">
-              <h3>
-                <TrendingUp size={20} />
-                24 小時調用趨勢
-              </h3>
-              <span className="chart-subtitle">每小時統計</span>
-            </div>
-            <div className="chart-content">
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={hourlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                  <XAxis dataKey="time" stroke="var(--text-secondary)" />
-                  <YAxis yAxisId="left" stroke="var(--text-secondary)" />
-                  <YAxis yAxisId="right" orientation="right" stroke="var(--text-tertiary)" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'var(--bg-primary)', 
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '8px',
-                      color: 'var(--text-primary)'
-                    }} 
-                  />
-                  <Legend />
-                  <Line 
-                    yAxisId="left"
-                    type="monotone" 
-                    dataKey="calls" 
-                    stroke="#3b82f6" 
-                    strokeWidth={2}
-                    dot={{ fill: '#3b82f6', r: 4 }}
-                    name="調用次數"
-                  />
-                  <Line 
-                    yAxisId="right"
-                    type="monotone" 
-                    dataKey="avgTime" 
-                    stroke="#8b5cf6" 
-                    strokeWidth={2}
-                    dot={{ fill: '#8b5cf6', r: 4 }}
-                    name="平均響應時間 (ms)"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="chart-header">
+            <h3>
+              <TrendingUp size={20} />
+              24 小時調用趨勢
+            </h3>
+            <span className="chart-subtitle">每小時統計</span>
+          </div>
+          <div className="chart-content">
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={hourlyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                <XAxis dataKey="time" stroke="var(--text-secondary)" />
+                <YAxis yAxisId="left" stroke="var(--text-secondary)" />
+                <YAxis yAxisId="right" orientation="right" stroke="var(--text-tertiary)" />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--bg-primary)', 
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    color: 'var(--text-primary)'
+                  }} 
+                />
+                <Legend />
+                <Line 
+                  yAxisId="left"
+                  type="monotone" 
+                  dataKey="calls" 
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  dot={{ fill: '#3b82f6', r: 4 }}
+                  name="調用次數"
+                />
+                <Line 
+                  yAxisId="right"
+                  type="monotone" 
+                  dataKey="avgTime" 
+                  stroke="#8b5cf6" 
+                  strokeWidth={2}
+                  dot={{ fill: '#8b5cf6', r: 4 }}
+                  name="平均響應時間 (ms)"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
           </div>
 
           {/* 路由使用分佈（餅圖） */}

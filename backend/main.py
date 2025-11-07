@@ -1156,7 +1156,7 @@ async def get_usage_stats(request: Request):
             ORDER BY call_count DESC
             LIMIT 10
         """)
-        
+    
         # 5. 最近 100 條調用記錄（JOIN tokens 獲取名稱）
         recent_logs = await conn.fetch("""
             SELECT 
