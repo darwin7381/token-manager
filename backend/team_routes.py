@@ -139,7 +139,7 @@ async def create_team(
         else:
             creator_metadata = {}
         
-        team_roles = creator_metadata.get(f"{NAMESPACE}:teamRoles", {})
+        team_roles = dict(creator_metadata.get(f"{NAMESPACE}:teamRoles", {}))  # 複製一份！
         
         # 添加新團隊的 ADMIN 角色
         team_roles[data.id] = "ADMIN"

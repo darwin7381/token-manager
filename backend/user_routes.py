@@ -135,7 +135,7 @@ async def update_team_role(
             )
     
     # === 5. 更新該團隊的角色 ===
-    team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+    team_roles = dict(target_metadata.get(f"{NAMESPACE}:teamRoles", {}))  # 複製一份！
     team_roles[data.team_id] = data.role
     
     updated_metadata = target_metadata.copy()
@@ -232,7 +232,7 @@ async def add_user_to_team(
                 target_metadata = json.loads(json.dumps(target_user.public_metadata))
         else:
             target_metadata = {}
-        team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+        team_roles = dict(target_metadata.get(f"{NAMESPACE}:teamRoles", {}))  # 複製一份！
         
         # 檢查是否已在團隊
         if data.team_id in team_roles:
@@ -307,7 +307,7 @@ async def remove_user_from_team(
                 target_metadata = json.loads(json.dumps(target_user.public_metadata))
         else:
             target_metadata = {}
-        team_roles = target_metadata.get(f"{NAMESPACE}:teamRoles", {})
+        team_roles = dict(target_metadata.get(f"{NAMESPACE}:teamRoles", {}))  # 複製一份！
         target_role_in_team = team_roles.get(team_id)
         
         if not target_role_in_team:
@@ -329,7 +329,7 @@ async def remove_user_from_team(
         
         # 獲取完整的現有 metadata（已在上面轉換過）
         current_metadata = target_metadata
-        current_team_roles = current_metadata.get(f"{NAMESPACE}:teamRoles", {})
+        current_team_roles = dict(current_metadata.get(f"{NAMESPACE}:teamRoles", {}))  # 複製一份！
         
         print(f"🔍 Current teamRoles: {current_team_roles}")
         
