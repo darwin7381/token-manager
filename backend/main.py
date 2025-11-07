@@ -892,25 +892,32 @@ async def get_dashboard_overview(request: Request):
         """)
         
         # 將 JOIN 的結果合併到 details 中
+        import json
         recent_logs = []
         for log in recent_logs_raw:
-            log_dict = dict(log)
-            details = log_dict.get('details') or {}
+            log_dict = {
+                'action': log['action'],
+                'entity_type': log['entity_type'],
+                'entity_id': log['entity_id'],
+                'created_at': log['created_at']
+            }
+            
+            # 處理 details（JSONB 轉為 dict）
+            if log['details']:
+                details = dict(log['details']) if isinstance(log['details'], dict) else json.loads(log['details'])
+            else:
+                details = {}
             
             # 補充 name（優先使用 JOIN 的結果，其次才用 details 中的）
             if not details.get('name'):
-                if log_dict['entity_type'] == 'token' and log_dict.get('token_name'):
-                    details['name'] = log_dict['token_name']
-                elif log_dict['entity_type'] == 'route':
+                if log['entity_type'] == 'token' and log.get('token_name'):
+                    details['name'] = log['token_name']
+                elif log['entity_type'] == 'route':
                     # 路由優先用 route_name，否則用 path
-                    details['name'] = log_dict.get('route_name') or log_dict.get('route_path')
-                    if log_dict.get('route_path') and not details.get('path'):
-                        details['path'] = log_dict['route_path']
+                    details['name'] = log.get('route_name') or log.get('route_path')
+                    if log.get('route_path') and not details.get('path'):
+                        details['path'] = log['route_path']
             
-            # 移除額外的欄位，保持 API 格式一致
-            log_dict.pop('token_name', None)
-            log_dict.pop('route_name', None) 
-            log_dict.pop('route_path', None)
             log_dict['details'] = details
             recent_logs.append(log_dict)
         
