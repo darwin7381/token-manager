@@ -331,7 +331,8 @@ export const updateUserTeamRole = async (userId, teamId, role, token) => {
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'Failed to update team role');
+    const detail = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail || error);
+    throw new Error(detail || 'Failed to update team role');
   }
   
   return response.json();
@@ -352,7 +353,8 @@ export const addUserToTeam = async (userId, teamId, role, token) => {
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.detail || 'Failed to add user to team');
+    const detail = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail || error);
+    throw new Error(detail || 'Failed to add user to team');
   }
   
   return response.json();

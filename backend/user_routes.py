@@ -156,8 +156,19 @@ async def update_team_role(
         }
     
     except Exception as e:
-        print(f"❌ Failed to update user: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
+        import json
+        # 安全地提取錯誤訊息
+        error_msg = str(e)
+        if hasattr(e, 'body'):
+            try:
+                error_body = json.loads(e.body) if isinstance(e.body, str) else e.body
+                if isinstance(error_body, dict) and 'errors' in error_body:
+                    error_msg = error_body['errors'][0].get('message', str(e))
+            except:
+                pass
+        
+        print(f"❌ Failed to update user: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Failed to update user: {error_msg}")
 
 @router.post("/{user_id}/team-membership")
 async def add_user_to_team(
@@ -260,8 +271,20 @@ async def add_user_to_team(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"❌ Failed to add user to team: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to add user to team: {str(e)}")
+        import json
+        # 安全地提取錯誤訊息
+        error_msg = str(e)
+        # 如果是 Clerk API 錯誤，嘗試提取詳細訊息
+        if hasattr(e, 'body'):
+            try:
+                error_body = json.loads(e.body) if isinstance(e.body, str) else e.body
+                if isinstance(error_body, dict) and 'errors' in error_body:
+                    error_msg = error_body['errors'][0].get('message', str(e))
+            except:
+                pass
+        
+        print(f"❌ Failed to add user to team: {error_msg}")
+        raise HTTPException(status_code=500, detail=f"Failed to add user to team: {error_msg}")
 
 @router.delete("/{user_id}/team-membership/{team_id}")
 async def remove_user_from_team(
