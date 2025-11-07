@@ -4,7 +4,7 @@ import { useAuth } from '@clerk/clerk-react';
 import { ROLES, getRoleInfo } from '../../constants/roles';
 import { usePermissions } from '../../hooks/usePermissions';
 
-const API_URL = import.meta.env.VITE_API_URL || `${API_URL}`;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function EditTeamModal({ team, onClose, onSave }) {
   const { getToken } = useAuth();
