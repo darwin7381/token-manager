@@ -147,7 +147,16 @@ export default function EditUserModal({ user, onClose, onSave }) {
       alert(`成功將用戶設置為 ${allManageableTeams.length} 個團隊的 ${bulkRole}`);
     } catch (error) {
       console.error('Failed to bulk set role:', error);
-      alert('批量設置失敗：' + error.message);
+      // 改進錯誤訊息顯示
+      let errorMsg = '未知錯誤';
+      if (error.message) {
+        errorMsg = typeof error.message === 'string' ? error.message : JSON.stringify(error.message);
+      } else if (error.detail) {
+        errorMsg = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+      } else {
+        errorMsg = JSON.stringify(error);
+      }
+      alert('批量設置失敗：' + errorMsg);
     } finally {
       setSaving(false);
     }
