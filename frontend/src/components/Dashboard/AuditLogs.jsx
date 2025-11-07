@@ -41,7 +41,7 @@ function AuditLogs() {
       if (filters.action) params.append('action', filters.action);
       if (filters.entity_type) params.append('entity_type', filters.entity_type);
       
-      const response = await fetch(`/api/dashboard/audit-logs?${params}`, {
+      const response = await fetch(`${API_URL}/api/dashboard/audit-logs?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

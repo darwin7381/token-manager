@@ -30,7 +30,7 @@ function SystemHealth() {
       setError(null);
       
       // 健康檢查不需要認證，直接調用
-      const response = await fetch('/health/detailed');
+      const response = await fetch(`${API_URL}/health/detailed`);
 
       if (!response.ok) {
         const errorText = await response.text();

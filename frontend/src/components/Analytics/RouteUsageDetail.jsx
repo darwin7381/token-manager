@@ -40,7 +40,7 @@ function RouteUsageDetail() {
       setError(null);
       const token = await getToken();
       
-      const response = await fetch(`/api/usage/route?route_path=${encodeURIComponent(routePath)}&limit=100`, {
+      const response = await fetch(`${API_URL}/api/usage/route?route_path=${encodeURIComponent(routePath)}&limit=100`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

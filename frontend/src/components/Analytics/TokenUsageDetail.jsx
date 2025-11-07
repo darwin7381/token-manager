@@ -34,7 +34,7 @@ function TokenUsageDetail() {
       setError(null);
       const token = await getToken();
       
-      const response = await fetch(`/api/usage/token/${tokenId}?limit=100`, {
+      const response = await fetch(`${API_URL}/api/usage/token/${tokenId}?limit=100`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
