@@ -131,7 +131,7 @@ export default function EditUserModal({ user, onClose, onSave }) {
       const allManageableTeams = [...new Set([...userTeams.filter(t => {
         const myRole = myTeamRoles[t];
         return myRole === 'ADMIN' || myRole === 'MANAGER';
-      }), ...availableTeamsToAdd])];
+      }), ...availableTeamsToAdd.map(team => team.id)])];
       
       // 批量設置
       for (const teamId of allManageableTeams) {
