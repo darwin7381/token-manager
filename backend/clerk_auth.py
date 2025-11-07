@@ -39,7 +39,10 @@ async def verify_clerk_token(request: Request) -> Dict[str, Any]:
         request_state = clerk_client.authenticate_request(
             httpx_request,
             AuthenticateRequestOptions(
-                authorized_parties=['http://localhost:5173']
+                authorized_parties=[
+                    'http://localhost:5173',  # 本地開發
+                    'https://token.blocktempo.ai'  # 生產前端
+                ]
             )
         )
         
