@@ -756,7 +756,299 @@ DELETE FROM tokens WHERE created_by = 'kv-import';
 
 ---
 
-**文件版本**: 3.0  
-**最後更新**: 2025-11-06  
-**狀態**: ✅ 首次生產部署完成，KV 反向同步機制已實施並測試
+## 🌐 前端部署到 Railway（2025-11-07）
+
+### **部署配置**
+
+#### **在 Railway Dashboard 創建前端 Service**
+
+1. **創建新 Service**
+   - 點擊 "+ New" → GitHub Repo
+   - 選擇同一個 repo：`darwin7381/token-manager`
+
+2. **Settings → General**
+   ```
+   Service Name: frontend-token-manager
+   Root Directory: frontend  ← 重要！區分前後端
+   ```
+
+3. **Settings → Build**
+   ```
+   Builder: Nixpacks（自動檢測）
+   Build Command: npm install && npm run build
+   Start Command: npm run preview -- --host 0.0.0.0 --port $PORT
+   Watch Paths: frontend/**  ← 只有前端變更才重新部署
+   ```
+
+4. **Variables → Raw Editor**
+   ```env
+   VITE_API_URL=https://tapi.blocktempo.ai
+   VITE_CLERK_PUBLISHABLE_KEY=pk_test_你的Clerk公鑰
+   ```
+
+5. **Settings → Networking**
+   ```
+   Custom Domain: token.blocktempo.ai
+   ```
+
+### **Vite 配置**
+
+```javascript
+// frontend/vite.config.js
+export default defineConfig({
+  preview: {
+    port: 4173,
+    host: '0.0.0.0',  // 允許外部訪問
+    allowedHosts: ['token.blocktempo.ai', 'localhost']  // 允許的域名
+  }
+})
+```
+
+### **遇到的問題與解決**
+
+#### **問題 1: Vite Preview 阻擋自定義域名**
+
+**錯誤訊息：**
+```
+Blocked request. This host ("token.blocktempo.ai") is not allowed.
+To allow this host, add "token.blocktempo.ai" to `preview.allowedHosts` in vite.config.js.
+```
+
+**原因：** Vite 的安全機制，防止 DNS rebinding 攻擊
+
+**解決：**
+```javascript
+preview: {
+  allowedHosts: ['token.blocktempo.ai', 'localhost']
+}
+```
+
+#### **問題 2: URL 重複（token.blocktempo.ai/tapi.blocktempo.ai/api/...）**
+
+**原因：** Railway Variables 中設置的是：
+```env
+VITE_API_URL=${{backend: token-manager.RAILWAY_PUBLIC_DOMAIN}}
+```
+
+這只會給域名（`tapi.blocktempo.ai`），沒有 `https://`
+
+**解決：** 改用固定值
+```env
+VITE_API_URL=https://tapi.blocktempo.ai
+```
+
+**教訓：**
+- ❌ 不要使用 Railway 的變數引用（會缺少協議）
+- ✅ 直接寫固定值（域名不常變）
+
+#### **問題 3: 所有 API 返回 401 - TOKEN_INVALID_AUTHORIZED_PARTIES**
+
+**錯誤：**
+```json
+{
+  "detail": "User not signed in. 
+   Reason: TokenVerificationErrorReason.TOKEN_INVALID_AUTHORIZED_PARTIES"
+}
+```
+
+**原因：** 後端 `clerk_auth.py` 硬編碼了：
+```python
+authorized_parties=['http://localhost:5173']  # 只允許本地
+```
+
+Clerk token 有 `azp`（authorized party）聲明，後端驗證時必須匹配。
+
+**為什麼本地可以，生產不行？**
+- 本地前端（localhost:5173）→ token 的 azp 是 localhost:5173 ✅
+- 生產前端（token.blocktempo.ai）→ token 的 azp 是 token.blocktempo.ai ❌
+
+**解決：**
+```python
+# 從環境變數讀取
+allowed_origins = os.getenv('ALLOWED_FRONTEND_ORIGINS', 
+                           'http://localhost:5173,https://token.blocktempo.ai')
+authorized_parties = [origin.strip() for origin in allowed_origins.split(',')]
+```
+
+**Railway 後端需要添加環境變數：**
+```env
+ALLOWED_FRONTEND_ORIGINS=http://localhost:5173,https://token.blocktempo.ai
+FRONTEND_URL=https://token.blocktempo.ai
+```
+
+#### **問題 4: API 相對路徑在生產環境失效**
+
+**受影響的文件：**
+```
+Dashboard.jsx        - fetch('/api/dashboard/overview')
+UsageAnalytics.jsx   - fetch('/api/usage/stats')
+AuditLogs.jsx        - fetch('/api/dashboard/audit-logs')
+SystemHealth.jsx     - fetch('/health/detailed')
+TokenUsageDetail.jsx - fetch('/api/usage/token/...')
+RouteUsageDetail.jsx - fetch('/api/usage/route?...')
+```
+
+**為什麼本地可以？**
+```
+本地：fetch('/api/...')
+  ↓ Vite dev server proxy
+http://localhost:8000/api/... ✅
+```
+
+**為什麼生產不行？**
+```
+生產：fetch('/api/...')
+  ↓ 沒有 proxy
+https://token.blocktempo.ai/api/... ❌ (不存在)
+```
+
+**解決：** 所有組件改用完整 URL
+```javascript
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+fetch(`${API_URL}/api/...`)
+```
+
+**修正的文件（共 11 個）：**
+- Dashboard/Dashboard.jsx
+- Dashboard/AuditLogs.jsx
+- Dashboard/SystemHealth.jsx
+- Analytics/UsageAnalytics.jsx
+- Analytics/TokenUsageDetail.jsx
+- Analytics/RouteUsageDetail.jsx
+- TeamManagement/TeamManagement.jsx
+- TeamManagement/EditTeamModal.jsx
+- UserManagement/UserManagement.jsx
+- UserManagement/EditUserModal.jsx
+- UserManagement/InviteUserModal.jsx
+
+#### **問題 5: 環境變數名稱不一致**
+
+**發現：**
+- `.env` 文件：`VITE_API_BASE_URL`
+- 代碼中：`VITE_API_URL`
+- Railway Variables：`VITE_API_BASE_URL`
+
+**影響：** 環境變數完全不生效
+
+**解決：** 統一使用 `VITE_API_URL`
+
+### **關鍵教訓**
+
+#### **1. Vite 環境變數機制**
+
+```
+構建時：
+  import.meta.env.VITE_API_URL 
+    ↓ Vite 替換為
+  "https://tapi.blocktempo.ai"（編譯進代碼）
+
+運行時：
+  已經是固定值，無法動態改變
+```
+
+**重要：**
+- ✅ 環境變數必須在**構建時**就存在
+- ✅ Railway Variables 會在構建時傳遞給 Vite
+- ✅ 所有 `VITE_*` 開頭的變數都會被替換
+
+#### **2. 前端部署模式**
+
+| 模式 | 命令 | 用途 | 熱更新 | 外部訪問 |
+|------|------|------|--------|---------|
+| Dev | `vite` | 本地開發 | ✅ | ❌ (localhost only) |
+| Preview | `vite preview --host 0.0.0.0` | 生產部署 | ❌ | ✅ |
+
+**Railway 使用 preview 模式：**
+- 先構建（`npm run build`）
+- 再預覽（`npm run preview`）
+- 監聽 `0.0.0.0:$PORT`（允許外部訪問）
+
+#### **3. Clerk authorized_parties**
+
+**Clerk JWT token 包含 `azp` 聲明，表示 token 從哪個域名獲取。**
+
+後端驗證時必須檢查 `azp` 是否在允許列表中：
+
+```python
+authorized_parties=[
+    'http://localhost:5173',      # 本地開發
+    'https://token.blocktempo.ai'  # 生產前端
+]
+```
+
+**不匹配會導致：** `TOKEN_INVALID_AUTHORIZED_PARTIES` 錯誤
+
+#### **4. 硬編碼域名的風險**
+
+**影響範圍：**
+- ❌ Clerk 認證（authorized_parties）
+- ❌ 邀請重定向（redirect_url）
+- ❌ 前端 API 調用（API_URL）
+- ❌ 文檔連結（API docs）
+
+**最佳實踐：**
+- ✅ 所有域名從環境變數讀取
+- ✅ 提供合理的默認值（本地開發）
+- ✅ 生產環境通過 Railway Variables 覆蓋
+
+---
+
+## 📊 完整部署狀態（2025-11-07）
+
+### **已部署的服務：**
+
+| 服務 | 域名 | 狀態 | Root Dir |
+|------|------|------|----------|
+| **後端** | tapi.blocktempo.ai | ✅ Active | `.` |
+| **前端** | token.blocktempo.ai | ✅ Active | `frontend` |
+| **Worker** | api-gateway.cryptoxlab.workers.dev | ✅ Active | - |
+| **PostgreSQL** | (內部) | ✅ Active | - |
+
+### **環境變數總表：**
+
+#### **後端 (token-manager service):**
+```env
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+CLERK_SECRET_KEY=sk_test_...
+TOKEN_ENCRYPTION_KEY=...
+CF_ACCOUNT_ID=...
+CF_API_TOKEN=...
+CF_KV_NAMESPACE_ID=...
+ALLOWED_FRONTEND_ORIGINS=http://localhost:5173,https://token.blocktempo.ai
+FRONTEND_URL=https://token.blocktempo.ai
+```
+
+#### **前端 (frontend service):**
+```env
+VITE_API_URL=https://tapi.blocktempo.ai
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+```
+
+#### **Worker:**
+```toml
+TOKEN_MANAGER_BACKEND = "https://tapi.blocktempo.ai"
+```
+
+### **測試驗證：**
+
+```bash
+# 1. 後端健康檢查
+curl https://tapi.blocktempo.ai/health
+
+# 2. 前端訪問
+open https://token.blocktempo.ai
+
+# 3. 完整流程測試
+# - 登入 Clerk
+# - 查看 Dashboard
+# - 創建 Token
+# - 測試 Worker
+# - 查看使用分析
+```
+
+---
+
+**文件版本**: 4.0  
+**最後更新**: 2025-11-07  
+**狀態**: ✅ 前後端全部部署完成，所有硬編碼已移除
 
