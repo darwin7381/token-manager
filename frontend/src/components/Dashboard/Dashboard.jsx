@@ -26,6 +26,8 @@ function Dashboard() {
   const [error, setError] = useState(null);
 
   const [usageData, setUsageData] = useState(null);
+  const [tokensMap, setTokensMap] = useState({});
+  const [routesMap, setRoutesMap] = useState({});
 
   useEffect(() => {
     loadDashboardData();
@@ -38,17 +40,44 @@ function Dashboard() {
       setError(null);
       const token = await getToken();
       
-      const response = await fetch(`${API_URL}/api/dashboard/overview`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      // 同時載入 dashboard、tokens 和 routes
+      const [dashboardResponse, tokensResponse, routesResponse] = await Promise.all([
+        fetch(`${API_URL}/api/dashboard/overview`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/tokens`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${API_URL}/api/routes`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
 
-      if (!response.ok) {
+      if (!dashboardResponse.ok) {
         throw new Error('Failed to load dashboard data');
       }
 
-      const result = await response.json();
+      const result = await dashboardResponse.json();
+      
+      // 建立 tokens 和 routes 的 ID -> name 映射
+      if (tokensResponse.ok) {
+        const tokens = await tokensResponse.json();
+        const map = {};
+        tokens.forEach(t => {
+          map[t.id] = t.name;
+        });
+        setTokensMap(map);
+      }
+      
+      if (routesResponse.ok) {
+        const routes = await routesResponse.json();
+        const map = {};
+        routes.forEach(r => {
+          map[r.id] = r.name || r.path;
+        });
+        setRoutesMap(map);
+      }
+      
       setData(result);
     } catch (err) {
       console.error('Error loading dashboard:', err);
@@ -335,11 +364,31 @@ function Dashboard() {
             <Activity size={20} />
             最近活動
           </h3>
+          <span className="activity-count">最近 {recent_logs.length} 筆操作</span>
         </div>
-        <div className="activity-list">
-          {recent_logs.map((log, index) => (
-            <ActivityItem key={index} log={log} />
-          ))}
+        <div className="activity-table-wrapper">
+          <table className="activity-table">
+            <thead>
+              <tr>
+                <th>時間</th>
+                <th>操作</th>
+                <th>類型</th>
+                <th>資源名稱</th>
+                <th>相關資訊</th>
+                <th>操作者</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent_logs.map((log, index) => (
+                <ActivityRow 
+                  key={index} 
+                  log={log} 
+                  tokensMap={tokensMap}
+                  routesMap={routesMap}
+                />
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -359,50 +408,82 @@ function StatCard({ icon, title, value, color, trend }) {
   );
 }
 
-function ActivityItem({ log }) {
-  const getActionColor = (action) => {
-    switch (action) {
-      case 'create': return 'green';
-      case 'update': return 'blue';
-      case 'delete': return 'red';
-      default: return 'gray';
-    }
+function ActivityRow({ log, tokensMap, routesMap }) {
+  const getActionBadge = (action) => {
+    const styles = {
+      'create': { class: 'action-create', text: '創建' },
+      'update': { class: 'action-update', text: '更新' },
+      'delete': { class: 'action-delete', text: '刪除' }
+    };
+    const style = styles[action] || { class: 'action-default', text: action };
+    return <span className={`action-badge ${style.class}`}>{style.text}</span>;
   };
 
-  const getActionText = (action) => {
-    switch (action) {
-      case 'create': return '創建';
-      case 'update': return '更新';
-      case 'delete': return '刪除';
-      default: return action;
-    }
+  const getEntityBadge = (entityType) => {
+    const styles = {
+      'token': { icon: '🔑', text: 'Token', class: 'entity-token' },
+      'route': { icon: '🛣️', text: '路由', class: 'entity-route' },
+      'team': { icon: '👥', text: '團隊', class: 'entity-team' },
+      'user': { icon: '👤', text: '用戶', class: 'entity-user' }
+    };
+    const style = styles[entityType] || { icon: '📝', text: entityType, class: 'entity-default' };
+    return (
+      <span className={`entity-badge ${style.class}`}>
+        <span className="entity-icon">{style.icon}</span>
+        {style.text}
+      </span>
+    );
   };
 
-  const getEntityText = (entityType) => {
-    switch (entityType) {
-      case 'token': return 'Token';
-      case 'route': return '路由';
-      case 'team': return '團隊';
-      case 'user': return '用戶';
-      default: return entityType;
+  // 提取詳細資訊
+  const details = log.details || {};
+  
+  // 處理名稱：優先使用 details.name，否則從映射表查找
+  let name = details.name;
+  
+  if (!name && log.entity_id) {
+    if (log.entity_type === 'token') {
+      name = tokensMap[log.entity_id];  // 從 tokens 映射查找
+    } else if (log.entity_type === 'route') {
+      name = routesMap[log.entity_id];  // 從 routes 映射查找
     }
+  }
+  
+  // 如果還是沒有，使用 path 或顯示未命名
+  if (!name && details.path) {
+    name = details.path;
+  }
+  if (!name) {
+    name = '未命名';
+  }
+  
+  const teamName = details.team_name;
+  const path = details.path;
+  const scopes = details.scopes;
+  
+  // 提取操作者資訊
+  const operator = details.created_by_email || details.updated_by_email || details.deleted_by_email || '系統';
+
+  // 組合相關資訊
+  const getRelatedInfo = () => {
+    const info = [];
+    if (teamName) info.push(`團隊: ${teamName}`);
+    if (path) info.push(`路徑: ${path}`);
+    if (scopes && scopes.length > 0) info.push(`範圍: ${scopes.join(', ')}`);
+    return info.length > 0 ? info.join(' | ') : '-';
   };
 
   return (
-    <div className="activity-item">
-      <div className={`activity-badge badge-${getActionColor(log.action)}`}>
-        {getActionText(log.action)}
-      </div>
-      <div className="activity-content">
-        <span className="activity-type">{getEntityText(log.entity_type)}</span>
-        {log.details && log.details.name && (
-          <span className="activity-name">「{log.details.name}」</span>
-        )}
-      </div>
-      <div className="activity-time">
-        {format(parseISO(log.created_at), 'MM/dd HH:mm')}
-      </div>
-    </div>
+    <tr className="activity-row">
+      <td className="activity-time">
+        {format(parseISO(log.created_at), 'yyyy/MM/dd HH:mm:ss')}
+      </td>
+      <td>{getActionBadge(log.action)}</td>
+      <td>{getEntityBadge(log.entity_type)}</td>
+      <td className="activity-name">{name}</td>
+      <td className="activity-info">{getRelatedInfo()}</td>
+      <td className="activity-operator">{operator}</td>
+    </tr>
   );
 }
 

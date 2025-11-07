@@ -240,6 +240,9 @@ async def create_token(data: TokenCreate, request: Request):
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
             """, token_hash, token_encrypted, data.name, data.team_id, user["id"], data.description, data.scopes, expires_at)
+            
+            # 獲取團隊資訊用於審計日誌
+            team = await conn.fetchrow("SELECT name FROM teams WHERE id = $1", data.team_id)
         
         # 4. 同步到 Cloudflare KV
         try:
@@ -261,7 +264,11 @@ async def create_token(data: TokenCreate, request: Request):
         await log_audit("create", "token", token_id, {
             "name": data.name, 
             "team_id": data.team_id,
-            "created_by": user["id"]
+            "team_name": team['name'] if team else None,
+            "scopes": data.scopes,
+            "created_by": user["id"],
+            "created_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown"),
+            "description": data.description
         })
         
         # 6. 返回 token (只此一次!)
@@ -397,10 +404,17 @@ async def update_token(token_id: int, data: TokenUpdate, request: Request):
             print(f"Warning: Failed to update token in KV: {e}")
     
     # 審計日誌
+    async with db.pool.acquire() as conn:
+        token_info = await conn.fetchrow("SELECT name, team_id FROM tokens WHERE id = $1", token_id)
+        team = await conn.fetchrow("SELECT name FROM teams WHERE id = $1", token_info['team_id']) if token_info['team_id'] else None
+    
     await log_audit("update", "token", token_id, {
         "name": data.name,
+        "team_id": token_info['team_id'] if token_info else None,
+        "team_name": team['name'] if team else None,
         "scopes": data.scopes,
-        "updated_by": user["id"]
+        "updated_by": user["id"],
+        "updated_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
     })
     
     # 生成 token_preview
@@ -485,10 +499,15 @@ async def delete_token(token_id: int, request: Request):
         # 因為 token 已經從數據庫刪除,下次創建會覆蓋 KV
     
     # 4. 記錄審計日誌
+    async with db.pool.acquire() as conn:
+        team = await conn.fetchrow("SELECT name FROM teams WHERE id = $1", token['team_id']) if token['team_id'] else None
+    
     await log_audit("delete", "token", token_id, {
         "name": token['name'],
         "team_id": token['team_id'],
-        "deleted_by": user["id"]
+        "team_name": team['name'] if team else None,
+        "deleted_by": user["id"],
+        "deleted_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
     })
     
     return {"status": "deleted"}
@@ -537,9 +556,12 @@ async def create_route(data: RouteCreate, request: Request):
     
     # 3. 記錄審計日誌
     await log_audit("create", "route", route_id, {
+        "name": data.name,
         "path": data.path,
         "backend_url": data.backend_url,
-        "tags": data.tags or []
+        "tags": data.tags or [],
+        "created_by": user["id"],
+        "created_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
     })
     
     # 確保返回時 backend_auth_config 是 dict（Pydantic 期望 dict）
@@ -682,9 +704,13 @@ async def update_route(route_id: int, data: RouteUpdate, request: Request):
     
     # 審計日誌
     await log_audit("update", "route", route_id, {
+        "name": data.name,
+        "path": route['path'],
         "backend_url": data.backend_url,
         "description": data.description,
-        "tags": data.tags
+        "tags": data.tags,
+        "updated_by": user["id"],
+        "updated_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
     })
     
     # 處理 backend_auth_config（如果是字串則解析為 dict）
@@ -735,7 +761,12 @@ async def delete_route(route_id: int, request: Request):
     await sync_routes_to_kv()
     
     # 審計日誌
-    await log_audit("delete", "route", route_id, {"path": route['path']})
+    await log_audit("delete", "route", route_id, {
+        "name": route['name'],
+        "path": route['path'],
+        "deleted_by": user["id"],
+        "deleted_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
+    })
     
     return {"status": "deleted"}
 
@@ -842,13 +873,46 @@ async def get_dashboard_overview(request: Request):
             ORDER BY date DESC
         """)
         
-        # 4. 最近 10 條審計日誌
-        recent_logs = await conn.fetch("""
-            SELECT action, entity_type, entity_id, details, created_at
-            FROM audit_logs
-            ORDER BY created_at DESC
+        # 4. 最近 10 條審計日誌（使用 LEFT JOIN 補充名稱）
+        recent_logs_raw = await conn.fetch("""
+            SELECT 
+                al.action, 
+                al.entity_type, 
+                al.entity_id, 
+                al.details, 
+                al.created_at,
+                t.name as token_name,
+                r.name as route_name,
+                r.path as route_path
+            FROM audit_logs al
+            LEFT JOIN tokens t ON al.entity_type = 'token' AND al.entity_id = t.id
+            LEFT JOIN routes r ON al.entity_type = 'route' AND al.entity_id = r.id
+            ORDER BY al.created_at DESC
             LIMIT 10
         """)
+        
+        # 將 JOIN 的結果合併到 details 中
+        recent_logs = []
+        for log in recent_logs_raw:
+            log_dict = dict(log)
+            details = log_dict.get('details') or {}
+            
+            # 補充 name（優先使用 JOIN 的結果，其次才用 details 中的）
+            if not details.get('name'):
+                if log_dict['entity_type'] == 'token' and log_dict.get('token_name'):
+                    details['name'] = log_dict['token_name']
+                elif log_dict['entity_type'] == 'route':
+                    # 路由優先用 route_name，否則用 path
+                    details['name'] = log_dict.get('route_name') or log_dict.get('route_path')
+                    if log_dict.get('route_path') and not details.get('path'):
+                        details['path'] = log_dict['route_path']
+            
+            # 移除額外的欄位，保持 API 格式一致
+            log_dict.pop('token_name', None)
+            log_dict.pop('route_name', None) 
+            log_dict.pop('route_path', None)
+            log_dict['details'] = details
+            recent_logs.append(log_dict)
         
         # 5. 即將過期的 Token（30 天內）
         expiring_soon = await conn.fetch("""
