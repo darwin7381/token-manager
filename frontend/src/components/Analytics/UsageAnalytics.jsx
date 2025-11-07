@@ -21,6 +21,7 @@ import { format, parseISO } from 'date-fns';
 import './UsageAnalytics.css';
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function UsageAnalytics() {
   const { getToken } = useAuth();
@@ -42,7 +43,7 @@ function UsageAnalytics() {
       setError(null);
       const token = await getToken();
       
-      const response = await fetch('/api/usage/stats', {
+      const response = await fetch(`${API_URL}/api/usage/stats`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
