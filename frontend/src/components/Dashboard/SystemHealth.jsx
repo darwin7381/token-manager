@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import './SystemHealth.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function SystemHealth() {
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);

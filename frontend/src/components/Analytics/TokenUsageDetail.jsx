@@ -16,6 +16,8 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
 import { format, parseISO } from 'date-fns';
 import './TokenUsageDetail.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function TokenUsageDetail() {
   const { tokenId } = useParams();
   const navigate = useNavigate();

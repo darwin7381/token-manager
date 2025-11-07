@@ -4,6 +4,8 @@ import { Search, Filter, Download, RefreshCw, FileText, AlertCircle } from 'luci
 import { format, parseISO } from 'date-fns';
 import './AuditLogs.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function AuditLogs() {
   const { getToken } = useAuth();
   const [logs, setLogs] = useState([]);
