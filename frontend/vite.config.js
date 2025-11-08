@@ -5,9 +5,21 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173
-    // 不使用 proxy，直接通過 VITE_API_URL 環境變數連接後端
-    // 確保後端有正確的 CORS 設置
+    port: 5173,
+    proxy: {
+      '/api': {
+        // 本地開發：http://localhost:8000
+        // 生產測試：https://tapi.blocktempo.ai
+        target: 'https://tapi.blocktempo.ai',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/health': {
+        target: 'https://tapi.blocktempo.ai',
+        changeOrigin: true,
+        secure: true,
+      }
+    }
   },
   preview: {
     port: 4173,
