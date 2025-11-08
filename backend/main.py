@@ -765,7 +765,7 @@ async def delete_route(route_id: int, request: Request):
     await check_core_team_permission(user, "delete")
     
     async with db.pool.acquire() as conn:
-        route = await conn.fetchrow("SELECT path FROM routes WHERE id = $1", route_id)
+        route = await conn.fetchrow("SELECT name, path FROM routes WHERE id = $1", route_id)
         
         if not route:
             raise HTTPException(404, "Route not found")
