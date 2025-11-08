@@ -838,6 +838,111 @@ async def update_route(id, data):
 
 ---
 
+## ❌ 錯誤 #8: Clerk authorized_parties 硬編碼導致生產環境 401（2025-11-08）
+
+### 嚴重程度
+🔴 **高** - 導致生產環境所有 API 無法使用，本地測試正常但部署後失敗
+
+### 問題描述
+
+後端硬編碼 `authorized_parties=['http://localhost:5173']`，導致生產環境前端無法調用 API，返回 401 錯誤。
+
+### 錯誤代碼
+
+```python
+# backend/clerk_auth.py
+
+# ❌ 硬編碼本地域名
+session = clerk.sessions.verify_token(
+    token,
+    authorized_parties=['http://localhost:5173']  # ← 只允許本地
+)
+```
+
+### 錯誤現象
+
+```
+本地開發（localhost:5173）:
+  ✅ 所有 API 正常工作
+  
+生產環境（token.blocktempo.ai）:
+  ❌ 所有 API 返回 401
+  ❌ 錯誤: "TOKEN_INVALID_AUTHORIZED_PARTIES"
+  ❌ 前端完全無法使用
+```
+
+### 根本原因
+
+**Clerk JWT token 包含 `azp`（authorized party）聲明**
+
+```yaml
+Token 結構:
+  azp: "http://localhost:5173"        # 本地開發
+  azp: "https://token.blocktempo.ai"  # 生產環境
+
+後端驗證:
+  authorized_parties = ['http://localhost:5173']  # 硬編碼
+  
+  本地: token.azp === 'localhost:5173' ✅ 匹配
+  生產: token.azp === 'token.blocktempo.ai' ❌ 不匹配 → 401
+```
+
+### 正確做法
+
+```python
+# ✅ 從環境變數讀取
+import os
+
+allowed_origins = os.getenv(
+    'ALLOWED_FRONTEND_ORIGINS', 
+    'http://localhost:5173'
+).split(',')
+
+authorized_parties = [origin.strip() for origin in allowed_origins]
+
+session = clerk.sessions.verify_token(
+    token,
+    authorized_parties=authorized_parties
+)
+```
+
+**環境變數設置**：
+```env
+# Railway 後端
+ALLOWED_FRONTEND_ORIGINS=http://localhost:5173,https://token.blocktempo.ai
+```
+
+### 關鍵點
+
+1. **本地測試正常不代表生產沒問題**
+2. **Clerk token 的 azp 與前端域名綁定**
+3. **authorized_parties 必須包含所有前端域名**
+4. **從環境變數讀取，不要硬編碼**
+
+### 影響範圍
+
+- ❌ 生產環境所有需要認證的 API
+- ❌ 用戶無法登入和使用系統
+- ❌ 錯誤訊息不明確（不會說是域名問題）
+
+### 預防措施
+
+1. **代碼審查檢查清單**：
+   - [ ] 是否有硬編碼的域名或 URL？
+   - [ ] 是否所有域名都從環境變數讀取？
+   - [ ] 環境變數是否有合理的預設值？
+
+2. **部署前測試**：
+   - 使用生產域名本地測試（設置 `.env.local`）
+   - 檢查所有 API 調用是否正常
+   - 驗證 Clerk 認證流程
+
+### 相關文檔
+
+- [部署完整記錄](../archive/deployment-configs/READY_FOR_DEPLOYMENT.md)
+
+---
+
 ## 📋 其他嚴重錯誤（待記錄）
 
 （未來如有其他嚴重錯誤，記錄在此）
