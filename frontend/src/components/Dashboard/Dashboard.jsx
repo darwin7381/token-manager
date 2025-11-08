@@ -379,14 +379,14 @@ function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {recent_logs.map((log, index) => (
+          {recent_logs.map((log, index) => (
                 <ActivityRow 
                   key={index} 
                   log={log} 
                   tokensMap={tokensMap}
                   routesMap={routesMap}
                 />
-              ))}
+          ))}
             </tbody>
           </table>
         </div>

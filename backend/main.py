@@ -240,7 +240,7 @@ async def create_token(data: TokenCreate, request: Request):
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
             """, token_hash, token_encrypted, data.name, data.team_id, user["id"], data.description, data.scopes, expires_at)
-            
+        
             # 獲取團隊資訊用於審計日誌
             team = await conn.fetchrow("SELECT name FROM teams WHERE id = $1", data.team_id)
         
