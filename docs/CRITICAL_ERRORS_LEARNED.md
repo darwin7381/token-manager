@@ -326,6 +326,178 @@ team_roles['new-team'] = 'ADMIN'  # ← 修改副本
 
 ---
 
+## ❌ 錯誤 #3: 前端批量操作混合物件與 ID（2025-11-07）
+
+### 嚴重程度
+🔴 **極度嚴重** - 導致批量設置功能完全失效
+
+### 問題描述
+
+在用戶管理的批量設置功能中，混合使用了 team 物件和 team ID，導致後端收到物件而非字串，Pydantic 驗證失敗。
+
+### 錯誤代碼
+
+```javascript
+// frontend/src/components/UserManagement/EditUserModal.jsx
+
+// ❌ 錯誤的做法
+const userTeams = Object.keys(userTeamRoles);  // ['labubu', 'core-team'] ← 字串陣列
+
+const availableTeamsToAdd = allTeams.filter(team => {
+  // allTeams 是物件陣列：[{id: 'data-team', name: 'Data Team', ...}, ...]
+  return myRole === 'ADMIN' && !userTeams.includes(team.id);
+});  // ← 返回的是物件陣列！
+
+// 混合物件和字串
+const allManageableTeams = [
+  ...userTeams,              // ['labubu', 'core-team'] ← 字串
+  ...availableTeamsToAdd     // [{id: 'data-team', ...}, ...] ← 物件！
+];
+
+// 批量設置
+for (const teamId of allManageableTeams) {
+  await onSave(user.id, {
+    action: 'add',
+    teamId,  // ← 可能是物件！
+    role: bulkRole
+  });
+}
+```
+
+### 錯誤現象
+
+```
+前端錯誤訊息:
+  ❌ 操作失敗：[{"type":"string_type","loc":["body","team_id"],"msg":"Input should be a valid string","input":{"id":"data-team","name":"Data Team",...}]
+
+後端錯誤:
+  422 Unprocessable Content
+  Pydantic validation error: team_id should be string, got object
+
+瀏覽器 Console:
+  POST /api/users/{user_id}/team-membership 422
+  Error: Input should be a valid string
+```
+
+### 根本原因
+
+**JavaScript 陣列操作時，沒有統一資料類型。**
+
+- `userTeams` 是從 `Object.keys()` 來的 → 字串陣列
+- `availableTeamsToAdd` 是從 `allTeams.filter()` 來的 → 物件陣列
+- 使用展開運算符混合兩者 → 陣列中同時包含字串和物件
+- 傳遞物件給後端 API → Pydantic 驗證失敗
+
+### 正確做法
+
+```javascript
+// ✅ 正確的做法
+const userTeams = Object.keys(userTeamRoles);  // 字串陣列
+
+const availableTeamsToAdd = allTeams.filter(team => {
+  const myRole = myTeamRoles[team.id];
+  return ['ADMIN', 'MANAGER'].includes(myRole) && !userTeams.includes(team.id);
+});  // 物件陣列
+
+// 統一轉換為 ID 字串陣列
+const allManageableTeams = [...new Set([
+  ...userTeams.filter(t => {
+    const myRole = myTeamRoles[t];
+    return myRole === 'ADMIN' || myRole === 'MANAGER';
+  }),
+  ...availableTeamsToAdd.map(team => team.id)  // ← 提取 ID！
+])];
+
+// 現在全部都是字串
+for (const teamId of allManageableTeams) {
+  await onSave(user.id, {
+    action: isNewTeam ? 'add' : 'update',
+    teamId,  // ← 保證是字串
+    role: bulkRole
+  });
+}
+```
+
+### 關鍵點
+
+1. **陣列操作時注意資料類型一致性**
+2. **物件陣列要提取 ID：`.map(item => item.id)`**
+3. **混合不同來源的資料時，統一格式**
+4. **TypeScript 可以預防此類錯誤（建議未來遷移）**
+
+### 影響範圍
+
+- ❌ 批量設置功能完全失效
+- ❌ 只有在批量操作時才會出現（單個操作正常）
+- ❌ 用戶體驗嚴重受損
+- ❌ 錯誤訊息不清楚（需要改進後端錯誤處理才能看到）
+
+### 診斷過程
+
+1. **初始錯誤**：`[object Object]` - 完全看不出問題
+2. **改進錯誤處理後**：看到 Pydantic 驗證錯誤
+3. **錯誤顯示**：`Input should be a valid string, got object`
+4. **定位問題**：前端混合了物件和字串
+5. **修復**：統一使用 `.map(team => team.id)`
+
+### 預防措施
+
+1. **代碼審查檢查清單**：
+   - [ ] 陣列中的元素類型是否一致？
+   - [ ] 是否有混合物件和原始類型？
+   - [ ] API 調用的參數類型是否正確？
+
+2. **測試要點**：
+   - 測試批量操作（不只單個操作）
+   - 檢查 Network 請求的 payload
+   - 驗證傳遞的資料格式
+
+3. **改進建議**：
+   - 使用 TypeScript（會在編譯時發現類型錯誤）
+   - 添加 prop-types 驗證
+   - 後端返回更清晰的錯誤訊息
+
+### 修復時間軸
+
+| 時間 | 事件 |
+|------|------|
+| 17:00 | 用戶報告批量設置失敗，`[object Object]` 錯誤 |
+| 17:10 | 改進前端錯誤顯示邏輯 |
+| 17:15 | 改進後端錯誤提取邏輯 |
+| 17:20 | 看到真實錯誤：Pydantic validation error |
+| 17:25 | 發現前端混合物件和 ID |
+| 17:30 | 修復：`.map(team => team.id)` |
+| 17:35 | 部署並驗證修復成功 |
+
+**總耗時**: 35 分鐘的功能中斷
+
+### 學到的教訓
+
+1. **JavaScript 的動態類型是雙刃劍**
+   - 優點：靈活
+   - 缺點：容易混合類型導致 runtime 錯誤
+
+2. **展開運算符不會進行類型轉換**
+   ```javascript
+   [...strings, ...objects]  // ← 不會自動統一類型！
+   ```
+
+3. **後端 Pydantic 驗證是最後防線**
+   - 前端應該傳遞正確類型
+   - 但後端驗證能捕獲錯誤
+   - 錯誤訊息要清晰
+
+4. **錯誤處理的重要性**
+   - 初始：`[object Object]` - 完全無用
+   - 改進後：清楚的 Pydantic 錯誤 - 立即定位問題
+
+### 相關文檔
+
+- [用戶管理功能文檔](./PERMISSIONS_GUIDE.md)
+- [Pydantic 驗證錯誤](https://docs.pydantic.dev/latest/errors/validation_errors/)
+
+---
+
 ## 📋 其他嚴重錯誤（待記錄）
 
 （未來如有其他嚴重錯誤，記錄在此）
