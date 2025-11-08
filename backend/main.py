@@ -34,19 +34,19 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# 註冊路由
-app.include_router(user_router)
-app.include_router(team_router)
-app.include_router(invite_router)
-
-# 配置 CORS
+# 配置 CORS（必須在註冊路由之前！）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生產環境應限制具體域名
+    allow_origins=["*"],  # 允許所有來源
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 註冊路由
+app.include_router(user_router)
+app.include_router(team_router)
+app.include_router(invite_router)
 
 
 # ==================== 啟動/關閉事件 ====================
