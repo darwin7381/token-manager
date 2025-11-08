@@ -463,9 +463,9 @@ GET    /api/teams/{team_id}/members            列出團隊成員
 
 ### 用戶管理
 ```
-GET    /api/users                              列出所有用戶
-PUT    /api/users/{user_id}/team-role          更新團隊角色
-POST   /api/users/{user_id}/team-membership    添加到團隊
+GET    /api/users                                        列出所有用戶（ADMIN/MANAGER）
+PUT    /api/users/{user_id}/team-role                    更新團隊角色
+POST   /api/users/{user_id}/team-membership              添加到團隊
 DELETE /api/users/{user_id}/team-membership/{team_id}  從團隊移除
 ```
 
