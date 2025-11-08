@@ -615,6 +615,106 @@ backendHeaders.set('Authorization', `Bearer ${actualToken}`);
 
 ---
 
+## ❌ 錯誤 #5: 瀏覽器剪貼簿 API 異步操作限制（2025-11-08）
+
+### 嚴重程度
+🟡 **中等** - 導致複製功能失效，但有標準解決方案
+
+### 問題描述
+
+在異步操作後使用 `navigator.clipboard.writeText()` 會失敗，因為瀏覽器的「用戶手勢上下文」在 await 後失效。
+
+### 錯誤代碼
+
+```javascript
+// ❌ 錯誤
+onClick={async () => {
+  const data = await fetch('/api/reveal');
+  await navigator.clipboard.writeText(data.token);  // NotAllowedError
+}}
+```
+
+### 根本原因
+
+瀏覽器安全機制：用戶點擊 → 同步代碼 ✅ → await → **上下文失效** → clipboard API ❌
+
+### 正確做法
+
+```javascript
+// ✅ 兩階段操作
+// 第一次點擊：獲取並存 state
+onClick={async () => {
+  const data = await fetch('/api/reveal');
+  setState(data.token);
+}}
+
+// 第二次點擊：同步複製（新的用戶手勢）
+onClick={() => {
+  navigator.clipboard.writeText(state.token);  // ✅ 成功
+}}
+```
+
+### 關鍵點
+
+1. 異步操作會失去用戶手勢上下文
+2. 解決方案：分離「獲取」和「複製」為兩次點擊
+3. 或者預先載入所有數據（降低安全性）
+
+### 影響範圍
+
+類似限制的 API：`window.open()`, `requestFullscreen()`, `focus()`, 檔案下載
+
+### 相關文檔
+
+- [完整解決方案](./CLIPBOARD_API_SOLUTION.md)
+
+---
+
+## ❌ 錯誤 #6: Wrangler CLI 命令格式變更（2025-11-08）
+
+### 嚴重程度
+🟡 **中等** - 導致部署命令失敗，但錯誤訊息明確
+
+### 問題描述
+
+Wrangler v3.x 改變了命令格式，從冒號分隔改為空格分隔，複製舊文檔的命令會失敗。
+
+### 錯誤代碼
+
+```bash
+# ❌ 錯誤（v2.x 舊格式）
+wrangler kv:namespace create "TOKENS"
+
+# 錯誤訊息
+Unknown command: kv:namespace
+Did you mean kv namespace?
+```
+
+### 根本原因
+
+Wrangler CLI 版本升級改變了命令格式。
+
+### 正確做法
+
+```bash
+# ✅ 正確（v3.x 新格式）
+wrangler kv namespace create "TOKENS"
+wrangler kv key put --binding=TOKENS "key" "value"
+wrangler kv key list --binding=TOKENS
+```
+
+### 關鍵點
+
+1. v3.x 使用**空格**：`kv namespace`, `kv key`
+2. v2.x 使用**冒號**：`kv:namespace`, `kv:key`
+3. 檢查版本：`wrangler --version`
+
+### 影響範圍
+
+多個文檔需要統一更新為新格式（但不影響功能理解）。
+
+---
+
 ## 📋 其他嚴重錯誤（待記錄）
 
 （未來如有其他嚴重錯誤，記錄在此）
