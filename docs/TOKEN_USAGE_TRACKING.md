@@ -49,9 +49,9 @@ Cloudflare Worker
           request_method,
           error_message
         }
-           ↓
-        Token Manager Backend
-           ↓
+         ↓
+      Token Manager Backend
+         ↓
         1. UPDATE tokens SET last_used = NOW()
         2. INSERT INTO token_usage_logs (...)
            ↓
@@ -212,13 +212,13 @@ async function logTokenUsage(tokenHash, routePath, responseStatus, responseTime,
 export default {
   async fetch(request, env, ctx) {
     // ... 驗證和轉發邏輯 ...
-    
+
     const startTime = Date.now();
-    const response = await fetch(backendRequest);
+const response = await fetch(backendRequest);
     const responseTime = Date.now() - startTime;
-    
+
     // 異步記錄（不阻塞）
-    ctx.waitUntil(
+ctx.waitUntil(
       logTokenUsage(
         tokenHash,
         matchedPath,
@@ -227,9 +227,9 @@ export default {
         request,
         env
       )
-    );
-    
-    return response;
+);
+
+return response;
   }
 }
 ```
