@@ -809,16 +809,23 @@ async def sync_routes_to_kv():
         if route['backend_auth_type'] and route['backend_auth_type'] != 'none':
             auth_config = route['backend_auth_config']
             
-            # 確保 auth_config 是 dict
-            if isinstance(auth_config, str):
-                try:
-                    auth_config = json.loads(auth_config)
-                except:
-                    auth_config = {}
+            # 安全轉換 JSONB 為 dict
+            if auth_config:
+                if isinstance(auth_config, str):
+                    try:
+                        auth_config = json.loads(auth_config)
+                    except:
+                        auth_config = {}
+                elif isinstance(auth_config, dict):
+                    auth_config = dict(auth_config)  # 複製一份，避免 JSONB 物件問題
+                else:
+                    auth_config = json.loads(json.dumps(auth_config))
+            else:
+                auth_config = {}
             
             route_config['auth'] = {
                 'type': route['backend_auth_type'],
-                'config': auth_config or {}
+                'config': auth_config
             }
         
         routes_map[route['path']] = route_config
