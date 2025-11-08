@@ -551,12 +551,8 @@ async def create_route(data: RouteCreate, request: Request):
                 raise HTTPException(400, f"Route path '{data.path}' already exists")
             raise HTTPException(500, f"Database error: {str(e)}")
     
-    # 2. 同步所有路由到 Cloudflare（失敗不影響創建）
-    try:
-        await sync_routes_to_kv()
-    except Exception as e:
-        print(f"⚠️  Warning: Failed to sync routes to KV: {e}")
-        # 不拋出錯誤，路由已經創建到資料庫
+    # 2. 同步所有路由到 Cloudflare
+    await sync_routes_to_kv()
     
     # 3. 記錄審計日誌
     await log_audit("create", "route", route_id, {
@@ -703,11 +699,8 @@ async def update_route(route_id: int, data: RouteUpdate, request: Request):
         await conn.execute(query, *params)
         route = await conn.fetchrow("SELECT * FROM routes WHERE id = $1", route_id)
     
-    # 同步到 Cloudflare（失敗不影響更新）
-    try:
-        await sync_routes_to_kv()
-    except Exception as e:
-        print(f"⚠️  Warning: Failed to sync routes to KV: {e}")
+    # 同步到 Cloudflare
+    await sync_routes_to_kv()
     
     # 審計日誌
     await log_audit("update", "route", route_id, {
@@ -764,11 +757,8 @@ async def delete_route(route_id: int, request: Request):
         
         await conn.execute("DELETE FROM routes WHERE id = $1", route_id)
     
-    # 同步到 Cloudflare（失敗不影響刪除）
-    try:
-        await sync_routes_to_kv()
-    except Exception as e:
-        print(f"⚠️  Warning: Failed to sync routes to KV: {e}")
+    # 同步到 Cloudflare
+    await sync_routes_to_kv()
     
     # 審計日誌
     await log_audit("delete", "route", route_id, {
