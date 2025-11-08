@@ -127,11 +127,18 @@ HTTP 客戶端
 
 ```
 名稱: Image Processor
-路徑: /api/image
+路徑: /api/image（前綴路徑，只需註冊一次）
 後端 URL: https://image-processor.railway.app
 描述: 圖片處理微服務
 標籤: image, media, processing
 ```
+
+💡 **重要**：只需註冊**前綴路徑**（如 `/api/image`），所有子路徑會自動轉發：
+- `/api/image/create` → 自動轉發到你的服務
+- `/api/image/read` → 自動轉發
+- `/api/image/任何路徑` → 自動轉發
+
+**不需要**為每個端點創建路由！
 
 **如果你的微服務需要認證**（例如需要 Bearer Token）：
 ```
@@ -357,29 +364,41 @@ curl https://api-gateway.cryptoxlab.workers.dev/api/image/test \
 
 ---
 
-## 🔄 路徑轉發規則
+## 🔄 路徑轉發規則（重要！）
 
-### Worker 如何處理路徑
+### 一個路由 = 所有子路徑
+
+**只需註冊前綴路徑**，例如註冊 `/api/hedgedoc`：
 
 ```
-請求: https://api-gateway.cryptoxlab.workers.dev/api/image/process/resize?size=100
+註冊的路由: /api/hedgedoc
+後端 URL: https://md.blocktempo.ai
+
+自動支援所有子路徑:
+  ✅ /api/hedgedoc/create → 轉發到 md.blocktempo.ai/create
+  ✅ /api/hedgedoc/read → 轉發到 md.blocktempo.ai/read  
+  ✅ /api/hedgedoc/new → 轉發到 md.blocktempo.ai/new
+  ✅ /api/hedgedoc/任何路徑 → 自動轉發
+
+不需要為 /create、/read、/new 分別創建路由！
+```
+
+### Worker 轉發邏輯
+
+```
+請求: https://api-gateway.cryptoxlab.workers.dev/api/hedgedoc/create?title=test
         
 路由配置:
-  路徑: /api/image
-  後端: https://image-processor.railway.app
+  路徑: /api/hedgedoc
+  後端: https://md.blocktempo.ai
 
 Worker 處理:
-  1. 匹配路由: /api/image ✅
-  2. 提取剩餘路徑: /process/resize
-  3. 保留 query: ?size=100
-  4. 拼接: https://image-processor.railway.app/process/resize?size=100
-  5. 轉發
+  1. 匹配路由: /api/hedgedoc ✅
+  2. 去除前綴，提取: /create
+  3. 保留 query: ?title=test
+  4. 拼接: https://md.blocktempo.ai/create?title=test
+  5. 轉發（保留 method、headers、body）
 ```
-
-**重要**：
-- 路徑會被「去除前綴」
-- Query parameters 會保留
-- HTTP method、headers、body 都會轉發
 
 ---
 
