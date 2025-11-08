@@ -715,6 +715,129 @@ wrangler kv key list --binding=TOKENS
 
 ---
 
+## ❌ 錯誤 #7: 環境變數名稱修改導致 KV Secret 孤兒問題（2025-11-08）
+
+### 嚴重程度
+🟡 **中等** - 導致 API 調用失敗，KV 資源洩漏
+
+### 問題描述
+
+在路由後端認證中，如果編輯路由時修改了環境變數名稱，會導致 KV 中的舊 Secret 成為孤兒（未被刪除），新名稱的 Secret 不存在，API 調用失敗。
+
+### 錯誤場景
+
+```yaml
+# 初始創建
+路由配置:
+  backend_auth_config: { "token_ref": "PERPLEXITY_API_KEY" }
+KV 中:
+  secret:PERPLEXITY_API_KEY = "pplx-xxxxx"
+
+# 用戶編輯路由，修改環境變數名稱
+修改為:
+  backend_auth_config: { "token_ref": "PPLX_KEY" }
+
+# 結果
+資料庫: token_ref = "PPLX_KEY"  ← 已更新
+KV 中:
+  secret:PERPLEXITY_API_KEY = "pplx-xxxxx"  ← 孤兒，沒被刪除
+  secret:PPLX_KEY = ???  ← 不存在！
+
+# Worker 運行時
+env.PPLX_KEY = undefined  ← 找不到
+後端 API 調用失敗: "Missing Authorization"
+```
+
+### 根本原因
+
+**缺少 Secret 生命週期管理**
+
+- 創建路由時：創建 Secret ✅
+- 更新路由時：更新配置，但沒有刪除舊 Secret ❌
+- 刪除路由時：沒有刪除對應的 Secret ❌
+
+### 正確做法
+
+**方案 A：鎖定環境變數名稱不可修改（推薦）**
+
+```javascript
+// 前端編輯表單
+<input 
+  value={authConfig.token_ref}
+  disabled={true}  // ← 鎖定，不可修改
+/>
+<small>環境變數名稱創建後不可修改</small>
+```
+
+**方案 B：自動管理 Secret 生命週期**
+
+```python
+# 後端更新路由時
+@app.put("/api/routes/{id}")
+async def update_route(id, data):
+    old_route = await get_route(id)
+    
+    # 檢查環境變數名稱是否改變
+    old_ref = old_route.backend_auth_config.get('token_ref')
+    new_ref = data.backend_auth_config.get('token_ref')
+    
+    if old_ref and new_ref and old_ref != new_ref:
+        # 刪除舊 secret
+        await cf_kv.delete(f"secret:{old_ref}")
+        # 創建新 secret（需要用戶提供新值）
+        await cf_kv.put(f"secret:{new_ref}", new_secret_value)
+```
+
+### 關鍵點
+
+1. **環境變數名稱是 Secret 的 key**，修改會導致找不到
+2. **KV Secret 需要明確的生命週期管理**
+3. **最簡單的方案**：創建後不允許修改名稱
+4. **如果要支持修改**：需要提示用戶重新輸入實際 Key
+
+### 影響範圍
+
+- ❌ 修改後的路由無法正常工作
+- ❌ KV 中累積孤兒 Secrets（資源洩漏）
+- ❌ 難以排查（沒有明確錯誤提示）
+
+### 預防措施
+
+1. **前端 UI**：
+   - 環境變數名稱欄位設為 `disabled`
+   - 說明文字：「環境變數名稱創建後不可修改」
+
+2. **後端驗證**：
+   ```python
+   if old_ref != new_ref:
+       raise HTTPException(
+           400, 
+           "環境變數名稱不可修改。如需更換，請刪除後重新創建路由。"
+       )
+   ```
+
+3. **刪除路由時清理 Secret**：
+   ```python
+   @app.delete("/api/routes/{id}")
+   async def delete_route(id):
+       route = await get_route(id)
+       
+       # 刪除對應的 secret
+       if route.backend_auth_config:
+           token_ref = route.backend_auth_config.get('token_ref')
+           if token_ref:
+               await cf_kv.delete(f"secret:{token_ref}")
+       
+       await delete_route_from_db(id)
+   ```
+
+### 相關文檔
+
+- [路由後端認證指南](./ROUTE_BACKEND_AUTH.md)
+- [當前狀態分析](../archive/analysis/CURRENT_STATUS_AND_ISSUES.md)
+
+---
+
 ## 📋 其他嚴重錯誤（待記錄）
 
 （未來如有其他嚴重錯誤，記錄在此）
