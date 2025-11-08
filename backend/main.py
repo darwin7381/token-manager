@@ -261,13 +261,16 @@ async def create_token(data: TokenCreate, request: Request):
             raise HTTPException(500, f"Failed to sync to Cloudflare: {str(e)}")
         
         # 5. 記錄審計日誌
+        email_addresses = user.get("email_addresses", [])
+        created_by_email = email_addresses[0].get("email_address", "unknown") if email_addresses else "unknown"
+        
         await log_audit("create", "token", token_id, {
             "name": data.name, 
             "team_id": data.team_id,
             "team_name": team['name'] if team else None,
             "scopes": data.scopes,
             "created_by": user["id"],
-            "created_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown"),
+            "created_by_email": created_by_email,
             "description": data.description
         })
         
@@ -408,13 +411,16 @@ async def update_token(token_id: int, data: TokenUpdate, request: Request):
         token_info = await conn.fetchrow("SELECT name, team_id FROM tokens WHERE id = $1", token_id)
         team = await conn.fetchrow("SELECT name FROM teams WHERE id = $1", token_info['team_id']) if token_info['team_id'] else None
     
+    email_addresses = user.get("email_addresses", [])
+    updated_by_email = email_addresses[0].get("email_address", "unknown") if email_addresses else "unknown"
+    
     await log_audit("update", "token", token_id, {
         "name": data.name,
         "team_id": token_info['team_id'] if token_info else None,
         "team_name": team['name'] if team else None,
         "scopes": data.scopes,
         "updated_by": user["id"],
-        "updated_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
+        "updated_by_email": updated_by_email
     })
     
     # 生成 token_preview
@@ -502,12 +508,15 @@ async def delete_token(token_id: int, request: Request):
     async with db.pool.acquire() as conn:
         team = await conn.fetchrow("SELECT name FROM teams WHERE id = $1", token['team_id']) if token['team_id'] else None
     
+    email_addresses = user.get("email_addresses", [])
+    deleted_by_email = email_addresses[0].get("email_address", "unknown") if email_addresses else "unknown"
+    
     await log_audit("delete", "token", token_id, {
         "name": token['name'],
         "team_id": token['team_id'],
         "team_name": team['name'] if team else None,
         "deleted_by": user["id"],
-        "deleted_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
+        "deleted_by_email": deleted_by_email
     })
     
     return {"status": "deleted"}
@@ -555,13 +564,16 @@ async def create_route(data: RouteCreate, request: Request):
     await sync_routes_to_kv()
     
     # 3. 記錄審計日誌
+    email_addresses = user.get("email_addresses", [])
+    created_by_email = email_addresses[0].get("email_address", "unknown") if email_addresses else "unknown"
+    
     await log_audit("create", "route", route_id, {
         "name": data.name,
         "path": data.path,
         "backend_url": data.backend_url,
         "tags": data.tags or [],
         "created_by": user["id"],
-        "created_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
+        "created_by_email": created_by_email
     })
     
     # 確保返回時 backend_auth_config 是 dict（Pydantic 期望 dict）
@@ -703,6 +715,9 @@ async def update_route(route_id: int, data: RouteUpdate, request: Request):
     await sync_routes_to_kv()
     
     # 審計日誌
+    email_addresses = user.get("email_addresses", [])
+    updated_by_email = email_addresses[0].get("email_address", "unknown") if email_addresses else "unknown"
+    
     await log_audit("update", "route", route_id, {
         "name": data.name,
         "path": route['path'],
@@ -710,7 +725,7 @@ async def update_route(route_id: int, data: RouteUpdate, request: Request):
         "description": data.description,
         "tags": data.tags,
         "updated_by": user["id"],
-        "updated_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
+        "updated_by_email": updated_by_email
     })
     
     # 處理 backend_auth_config（如果是字串則解析為 dict）
@@ -761,11 +776,14 @@ async def delete_route(route_id: int, request: Request):
     await sync_routes_to_kv()
     
     # 審計日誌
+    email_addresses = user.get("email_addresses", [])
+    deleted_by_email = email_addresses[0].get("email_address", "unknown") if email_addresses else "unknown"
+    
     await log_audit("delete", "route", route_id, {
         "name": route['name'],
         "path": route['path'],
         "deleted_by": user["id"],
-        "deleted_by_email": user.get("email_addresses", [{}])[0].get("email_address", "unknown")
+        "deleted_by_email": deleted_by_email
     })
     
     return {"status": "deleted"}
