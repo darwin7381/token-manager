@@ -943,6 +943,229 @@ ALLOWED_FRONTEND_ORIGINS=http://localhost:5173,https://token.blocktempo.ai
 
 ---
 
+## ❌ 錯誤 #9: Vite 環境變數名稱不一致導致完全失效（2025-11-08）
+
+### 嚴重程度
+🔴 **高** - 導致前端無法連接後端，但不會報錯
+
+### 問題描述
+
+前端代碼和配置文件使用不同的環境變數名稱，導致環境變數完全不生效，前端仍連接到錯誤的 URL。
+
+### 錯誤代碼
+
+```javascript
+// ❌ .env 文件
+VITE_API_BASE_URL=https://tapi.blocktempo.ai
+
+// ❌ 代碼中
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+//                                ^^^^^^^^^^^^
+//                                名稱不一致！
+```
+
+### 錯誤現象
+
+```
+配置了環境變數:
+  VITE_API_BASE_URL=https://tapi.blocktempo.ai
+  
+前端仍然連接:
+  http://localhost:8000  ← 使用了 fallback 預設值
+  
+沒有任何錯誤提示！
+```
+
+### 根本原因
+
+**Vite 環境變數名稱必須完全匹配**
+
+```
+.env 文件:        VITE_API_BASE_URL
+代碼中:           VITE_API_URL
+                  ^^^^^^^^^^^^^^^^ 不匹配 → undefined → 使用預設值
+```
+
+### 正確做法
+
+```javascript
+// ✅ 統一使用同一個名稱
+// .env
+VITE_API_URL=https://tapi.blocktempo.ai
+
+// 代碼
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+```
+
+### 關鍵點
+
+1. **環境變數名稱必須完全一致**（大小寫、底線數量）
+2. **Vite 環境變數靜默失敗**（不匹配時返回 undefined，不報錯）
+3. **全局搜索檢查所有使用處**
+4. **統一命名規範**（例如都用 `VITE_API_URL`）
+
+### 影響範圍
+
+- ❌ 所有前端組件連接錯誤的後端
+- ❌ 本地測試時發現不了（預設值是 localhost）
+- ❌ 生產環境資料不一致
+
+---
+
+## ❌ 錯誤 #10: Vite Preview allowedHosts 阻擋自定義域名（2025-11-08）
+
+### 嚴重程度
+🟡 **中等** - 導致生產部署無法訪問，但錯誤訊息明確
+
+### 問題描述
+
+Vite Preview 模式會阻擋自定義域名訪問，需要明確配置 `allowedHosts`。
+
+### 錯誤代碼
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  preview: {
+    port: 4173
+    // 缺少 allowedHosts 配置
+  }
+})
+```
+
+### 錯誤現象
+
+```
+訪問 https://token.blocktempo.ai
+
+錯誤訊息:
+  Blocked request. This host ("token.blocktempo.ai") is not allowed.
+  To allow this host, add "token.blocktempo.ai" to `preview.allowedHosts`.
+```
+
+### 根本原因
+
+**Vite 的 DNS rebinding 攻擊防護**
+
+Preview 模式只允許 localhost 訪問，阻擋其他域名。
+
+### 正確做法
+
+```javascript
+// ✅ 配置允許的域名
+export default defineConfig({
+  preview: {
+    port: 4173,
+    host: '0.0.0.0',
+    allowedHosts: ['token.blocktempo.ai', 'localhost']
+  }
+})
+```
+
+### 關鍵點
+
+1. **preview 模式需要明確配置 allowedHosts**
+2. **dev 模式沒有此限制**
+3. **生產部署使用 preview 模式**
+
+---
+
+## ❌ 錯誤 #11: Cloudflare KV API 返回格式誤判（2025-11-08）
+
+### 嚴重程度
+🟡 **中等** - 導致 KV 同步失敗
+
+### 問題描述
+
+錯誤地假設 Cloudflare KV API 的 `result` 是 dict，實際是 list。
+
+### 錯誤代碼
+
+```python
+# ❌ 錯誤假設
+response = await client.get(kv_api_url)
+data = response.json()
+result = data.get("result", {"keys": [], "cursor": None})  # 假設是 dict
+keys = result.get("keys")  # AttributeError: 'list' object has no attribute 'get'
+```
+
+### 根本原因
+
+**未驗證 API 返回的實際結構**
+
+Cloudflare KV list keys API 返回：
+```json
+{
+  "result": [  ← 這是 list，不是 dict
+    {"name": "token:xxx", "expiration": null},
+    {"name": "token:yyy", "expiration": null}
+  ],
+  "result_info": {
+    "cursor": "...",
+    "count": 100
+  }
+}
+```
+
+### 正確做法
+
+```python
+# ✅ 正確處理
+result = data.get("result", [])  # result 是 list
+result_info = data.get("result_info", {})
+return {
+    "keys": result,
+    "cursor": result_info.get("cursor")
+}
+```
+
+### 關鍵點
+
+1. **先在本地測試 API 調用，驗證返回格式**
+2. **不要假設 API 結構，要實際驗證**
+3. **第三方 API 文檔可能不完整或過時**
+
+---
+
+## ❌ 錯誤 #12: Clerk SDK 返回格式誤判（2025-11-08）
+
+### 嚴重程度
+🟡 **中等** - 導致用戶列表獲取失敗
+
+### 問題描述
+
+錯誤地假設 Clerk SDK 返回有 `.data` 屬性的對象，實際直接返回 list。
+
+### 錯誤代碼
+
+```python
+# ❌ 錯誤
+users_response = clerk.users.list(request={})
+users = users_response.data  # AttributeError: list has no attribute 'data'
+```
+
+### 根本原因
+
+**Clerk SDK 版本差異或文檔不準確**
+
+實際返回是直接的 list，不是包裝對象。
+
+### 正確做法
+
+```python
+# ✅ 正確
+users_response = clerk.users.list(request={})
+users = users_response  # 直接是 list
+```
+
+### 關鍵點
+
+1. **SDK 返回格式可能與文檔不一致**
+2. **先用小測試驗證返回值類型**
+3. **不同版本的 SDK 可能有不同格式**
+
+---
+
 ## 📋 其他嚴重錯誤（待記錄）
 
 （未來如有其他嚴重錯誤，記錄在此）
