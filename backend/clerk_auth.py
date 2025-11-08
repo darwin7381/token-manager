@@ -67,9 +67,17 @@ async def verify_clerk_token(request: Request) -> Dict[str, Any]:
         
         user = clerk_client.users.get(user_id=user_id)
         
+        # 安全轉換 email_addresses 為純 Python list
+        email_list = []
+        if user.email_addresses:
+            for email in user.email_addresses:
+                email_list.append({
+                    "email_address": email.email_address if hasattr(email, 'email_address') else str(email)
+                })
+        
         user_data = {
             "id": user.id,
-            "email_addresses": user.email_addresses,
+            "email_addresses": email_list,
             "first_name": user.first_name,
             "last_name": user.last_name,
             "image_url": user.image_url,
