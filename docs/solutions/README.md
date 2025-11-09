@@ -29,6 +29,13 @@
   - 儲存機制（PostgreSQL + KV）
   - 安全性設計
 
+### API Gateway 技術
+- **REDIRECT_HANDLING_SOLUTION.md** - HTTP Redirect 處理解決方案 ⭐ NEW
+  - 問題：Stream body 遇到 redirect 崩潰
+  - 解決：ArrayBuffer + Manual Redirect
+  - 關鍵：Location header 重寫保持 Gateway 語義
+  - 受益：HedgeDoc、OAuth、短網址等所有 redirect 服務
+
 ### UI/UX 設計
 - **DASHBOARD_ACTIVITY_TABLE_REDESIGN.md** - Dashboard 活動表格設計
   - 從卡片式改為表格式

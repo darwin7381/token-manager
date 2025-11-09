@@ -4,6 +4,199 @@
 
 ---
 
+## ❌ 錯誤 #0: Cloudflare Worker Response Headers 不可變性錯誤（2025-11-08）
+
+### 嚴重程度
+🔴 **嚴重** - 導致 API Gateway 無法正確轉發 redirect 響應的所有 headers
+
+### 問題描述
+
+在實施 HTTP redirect 處理時，嘗試直接使用後端 response 的 headers 對象創建新 response，並修改 Location header。但由於 Response headers 的不可變性，導致所有 headers 遺失，只有 body 被正確轉發。
+
+### 錯誤代碼
+
+```javascript
+// worker/src/worker.js - redirect 處理
+
+// ❌ 錯誤的做法
+if (backendResponse.status >= 300 && backendResponse.status < 400) {
+  const location = backendResponse.headers.get('Location');
+  
+  if (location) {
+    const rewrittenLocation = rewriteLocationHeader(...);
+    
+    // 創建新 response，直接傳入原始 headers
+    finalResponse = new Response(backendResponse.body, {
+      status: backendResponse.status,
+      statusText: backendResponse.statusText,
+      headers: backendResponse.headers  // ❌ 這是只讀的 Headers 對象！
+    });
+    
+    // 嘗試修改 headers
+    finalResponse.headers.set('Location', rewrittenLocation);  // ❌ 可能失敗或被忽略
+  }
+}
+```
+
+### 錯誤現象
+
+**透過 Gateway 的響應**:
+```http
+HTTP/2 302
+Found. Redirecting to https://md.blocktempo.ai/xxx
+
+❌ 沒有 location header
+❌ 沒有 set-cookie header  
+❌ 沒有 content-type header
+❌ 沒有 hedgedoc-version header
+❌ 所有後端 headers 都遺失
+```
+
+**直接請求後端的響應**:
+```http
+HTTP/2 302
+location: https://md.blocktempo.ai/xxx
+set-cookie: connect.sid=...
+content-type: text/plain; charset=utf-8
+hedgedoc-version: 1.10.3
+✅ 所有 headers 都存在
+```
+
+### 根本原因
+
+1. **Response 的 headers 屬性是不可變的（immutable）**
+   - `backendResponse.headers` 是只讀的 Headers 對象
+   - 直接傳給 `new Response()` 時，新 Response 的 headers 也是只讀的
+
+2. **後續的 set() 操作被忽略**
+   - `finalResponse.headers.set()` 沒有報錯
+   - 但實際上沒有生效
+   - 導致 headers 沒有被正確複製或修改
+
+3. **瀏覽器顯示的是 response body，不是 headers**
+   - `Found. Redirecting to...` 是 body 內容
+   - 實際的 Location header 已經遺失
+   - 客戶端無法正確跟隨 redirect
+
+### 影響範圍
+
+**嚴重影響的功能**:
+1. ❌ **Session 管理** - `set-cookie` 遺失，無法建立 session
+2. ❌ **內容協商** - `content-type` 遺失，客戶端不知道如何解析
+3. ❌ **安全性** - `content-security-policy` 遺失，安全性降低
+4. ❌ **Rate Limiting** - `x-ratelimit-*` 遺失，客戶端無法做流控
+5. ❌ **版本資訊** - 服務版本 headers 遺失
+
+**受影響的服務**:
+- HedgeDoc API (POST /new 返回 302)
+- 所有使用 redirect 的微服務
+- 依賴 session cookie 的服務
+
+### 正確解決方案
+
+```javascript
+// ✅ 正確的做法
+if (backendResponse.status >= 300 && backendResponse.status < 400) {
+  const location = backendResponse.headers.get('Location');
+  
+  if (location) {
+    const rewrittenLocation = rewriteLocationHeader(...);
+    
+    // 🔥 關鍵：創建新的可變 Headers 對象
+    const newHeaders = new Headers(backendResponse.headers);
+    
+    // 修改 Location header
+    newHeaders.set('Location', rewrittenLocation);
+    
+    // 用新的 Headers 創建 Response
+    finalResponse = new Response(backendResponse.body, {
+      status: backendResponse.status,
+      statusText: backendResponse.statusText,
+      headers: newHeaders  // ✅ 傳入可變的 Headers 副本
+    });
+  }
+}
+```
+
+**為何正確**:
+1. `new Headers(backendResponse.headers)` 創建一個**新的可變副本**
+2. 複製了所有原始 headers
+3. 可以安全地修改（如 `set('Location', ...)`）
+4. 所有 headers 都被正確保留和傳遞
+
+### 測試驗證
+
+**修復前**:
+```bash
+curl -i https://api-gateway.../api/hedgedoc/new
+# ❌ 只有 body，沒有 headers
+```
+
+**修復後**:
+```bash
+curl -i https://api-gateway.../api/hedgedoc/new
+
+HTTP/2 302 
+location: https://api-gateway.../api/hedgedoc/xxx  ✅
+set-cookie: connect.sid=...  ✅
+content-type: text/plain; charset=utf-8  ✅
+hedgedoc-version: 1.10.3  ✅
+content-security-policy: ...  ✅
+x-ratelimit-limit: 20  ✅
+# ✅ 所有 headers 都正確保留
+```
+
+### 核心教訓
+
+#### 1. **Response/Headers 是不可變的**
+```javascript
+// ❌ 不要假設可以修改 Response headers
+response.headers.set('X-Custom', 'value');  // 可能無效
+
+// ✅ 創建新的可變副本
+const newHeaders = new Headers(response.headers);
+newHeaders.set('X-Custom', 'value');
+const newResponse = new Response(response.body, { headers: newHeaders });
+```
+
+#### 2. **測試要看 Headers，不只是 Body**
+```bash
+# ❌ 不完整的測試
+curl https://api.example.com
+
+# ✅ 完整的測試
+curl -i https://api.example.com  # 顯示 headers
+```
+
+#### 3. **Proxy/Gateway 必須透明轉發**
+- ✅ 除了必要的修改（如 Location），其他 headers 原封不動
+- ✅ 客戶端應該得到跟直接請求後端「幾乎一樣」的響應
+- ✅ 不要假設哪些 headers「不重要」，全部保留
+
+#### 4. **Set-Cookie 等 headers 對功能至關重要**
+- `set-cookie`: Session 管理
+- `content-type`: 內容解析
+- `content-security-policy`: 安全性
+- `x-ratelimit-*`: 流量控制
+- 任何 headers 的遺失都可能破壞功能
+
+### 相關文檔
+
+- **完整解決方案**: `/docs/solutions/REDIRECT_HANDLING_SOLUTION.md`
+- **Worker 代碼**: `/worker/src/worker.js` (第 231-259 行)
+- **測試記錄**: `/docs/solutions/REDIRECT_HANDLING_SOLUTION.md` (測試章節)
+
+### 檢查清單
+
+在處理 Response 對象時：
+- [ ] 是否需要修改 headers？
+- [ ] 是否創建了新的可變 Headers 副本？
+- [ ] 是否測試了所有 headers 都正確轉發？
+- [ ] 是否用 `curl -i` 驗證了 headers？
+- [ ] 是否對比了直接請求後端的結果？
+
+---
+
 ## ❌ 錯誤 #1: PostgreSQL JSONB 欄位處理錯誤（2025-11-07）
 
 ### 嚴重程度

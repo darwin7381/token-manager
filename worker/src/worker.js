@@ -208,35 +208,72 @@ export default {
         }
       }
       
-      // 10. 轉發請求
+      // 10. 準備 body (buffer 化，支援 redirect)
+      let bodyContent = null;
+      if (request.body && ['POST', 'PUT', 'PATCH'].includes(request.method)) {
+        // 將 stream 轉為 buffer，讓 body 可以在 redirect 時重用
+        bodyContent = await request.arrayBuffer();
+      }
+      
+      // 11. 轉發請求
       const backendRequest = new Request(backendUrl, {
         method: request.method,
         headers: backendHeaders,
-        body: request.body,
-        redirect: 'follow'
+        body: bodyContent,
+        redirect: 'manual'  // 手動處理 redirect
       });
       
-      // 11. 發送請求並計時
+      // 12. 發送請求並計時
       const startTime = Date.now();
-      const response = await fetch(backendRequest);
+      const backendResponse = await fetch(backendRequest);
       const responseTime = Date.now() - startTime;
       
-      // 12. 記錄 Token 使用情況（異步，不阻塞響應）
+      // 13. 處理 redirect (3xx 狀態碼)
+      let finalResponse = backendResponse;
+      
+      if (backendResponse.status >= 300 && backendResponse.status < 400) {
+        const location = backendResponse.headers.get('Location');
+        
+        if (location) {
+          // 將後端的 Location 轉換為 Gateway URL
+          const requestUrl = new URL(request.url);
+          const rewrittenLocation = rewriteLocationHeader(
+            location,
+            backend,
+            matchedPath,
+            requestUrl.hostname
+          );
+          
+          // 創建新的可變 Headers 對象並複製所有 headers
+          const newHeaders = new Headers(backendResponse.headers);
+          // 修改 Location header 為 Gateway URL
+          newHeaders.set('Location', rewrittenLocation);
+          
+          // 創建新 response
+          finalResponse = new Response(backendResponse.body, {
+            status: backendResponse.status,
+            statusText: backendResponse.statusText,
+            headers: newHeaders
+          });
+        }
+      }
+      
+      // 14. 記錄 Token 使用情況（異步，不阻塞響應）
       // 使用 ctx.waitUntil 確保在響應返回後繼續執行
       ctx.waitUntil(
         logTokenUsage({
           tokenHash,
           routePath: matchedPath,
-          responseStatus: response.status,
+          responseStatus: finalResponse.status,
           responseTime,
           ipAddress: request.headers.get('cf-connecting-ip'),
           userAgent: request.headers.get('user-agent'),
           requestMethod: request.method,
-          errorMessage: response.ok ? null : `HTTP ${response.status}`
+          errorMessage: finalResponse.ok ? null : `HTTP ${finalResponse.status}`
         }, env)
       );
       
-      return response;
+      return finalResponse;
       
     } catch (error) {
       return jsonResponse({
@@ -247,6 +284,48 @@ export default {
     }
   }
 };
+
+/**
+ * 重寫 Location Header，將後端 URL 轉換為 Gateway URL
+ * 
+ * @param {string} location - 原始 Location header 值
+ * @param {string} backendBaseUrl - 後端基礎 URL (如 https://md.blocktempo.ai)
+ * @param {string} gatewayPrefix - Gateway 路徑前綴 (如 /api/hedgedoc)
+ * @param {string} gatewayHostname - Gateway 域名 (如 api-gateway.cryptoxlab.workers.dev)
+ * @returns {string} 重寫後的 Location URL
+ */
+function rewriteLocationHeader(location, backendBaseUrl, gatewayPrefix, gatewayHostname) {
+  try {
+    // 情況 1: 絕對 URL (https://backend.com/resource)
+    if (location.startsWith('http://') || location.startsWith('https://')) {
+      const locationUrl = new URL(location);
+      const backendUrl = new URL(backendBaseUrl);
+      
+      // 只重寫同源的 Location（防止重寫外部 redirect）
+      if (locationUrl.hostname === backendUrl.hostname) {
+        // 構建 Gateway URL
+        return `https://${gatewayHostname}${gatewayPrefix}${locationUrl.pathname}${locationUrl.search}${locationUrl.hash}`;
+      }
+      
+      // 外部 URL 不重寫
+      return location;
+    }
+    
+    // 情況 2: 絕對路徑 (/resource)
+    if (location.startsWith('/')) {
+      return `https://${gatewayHostname}${gatewayPrefix}${location}`;
+    }
+    
+    // 情況 3: 相對路徑 (resource 或 ./resource)
+    // 保持原樣（讓瀏覽器基於當前 URL 解析）
+    return location;
+    
+  } catch (error) {
+    // 解析失敗，返回原始值
+    console.error('Location rewrite error:', error);
+    return location;
+  }
+}
 
 /**
  * 計算 SHA256 hash
