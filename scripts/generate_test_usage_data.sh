@@ -84,7 +84,7 @@ echo -e "${BLUE}步驟 2:${NC} 驗證數據..."
 sleep 1
 
 RESPONSE=$(curl -s "$BACKEND_URL/api/usage/test-data")
-COUNT=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['count'])" 2>/dev/null || echo "0")
+COUNT=$(echo "$RESPONSE" | uv run python -c "import sys, json; print(json.load(sys.stdin)['count'])" 2>/dev/null || echo "0")
 
 echo -e "${GREEN}✅ 資料庫中共有 $COUNT 條使用記錄${NC}"
 echo ""

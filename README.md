@@ -276,18 +276,17 @@ Body:
 cd backend
 
 # 創建虛擬環境
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+uv venv
 
 # 安裝依賴
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # 設置環境變數
 cp ../.env.example .env
 # 編輯 .env 填入實際值
 
 # 啟動服務
-uvicorn main:app --reload --port 8000
+uv run uvicorn main:app --reload --port 8000
 ```
 
 訪問 http://localhost:8000/docs 查看 API 文檔

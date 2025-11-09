@@ -51,13 +51,14 @@ uv run uvicorn main:app --reload --port 8000
 ```bash
 # 新終端
 cd frontend
-python3 -m http.server 3001
+npm run dev
 ```
 
 ### 5. 測試系統
 
 ```bash
 # 新終端
+cd backend
 ./test_local.sh
 ```
 
@@ -67,7 +68,7 @@ python3 -m http.server 3001
 
 - **後端 API**: http://localhost:8000
 - **API 文檔**: http://localhost:8000/docs
-- **前端 UI**: http://localhost:3001
+- **前端 UI**: http://localhost:5173
 
 ---
 
@@ -87,7 +88,7 @@ curl -X POST http://localhost:8000/api/tokens \
 
 ### 列出 Tokens
 ```bash
-curl http://localhost:8000/api/tokens | python3 -m json.tool
+curl http://localhost:8000/api/tokens | uv run python -m json.tool
 ```
 
 ### 創建路由
@@ -103,7 +104,7 @@ curl -X POST http://localhost:8000/api/routes \
 
 ### 列出路由
 ```bash
-curl http://localhost:8000/api/routes | python3 -m json.tool
+curl http://localhost:8000/api/routes | uv run python -m json.tool
 ```
 
 ---
@@ -145,8 +146,8 @@ CF_KV_NAMESPACE_ID=your_actual_namespace_id
 
 ### 6. 重啟後端
 ```bash
-# 停止
-pkill -f "uvicorn main:app"
+# 停止(找出佔用端口的進程並終止)
+lsof -ti:8000 | xargs kill -9
 
 # 啟動
 cd backend
@@ -184,11 +185,13 @@ wrangler deploy
 ## 🛑 停止服務
 
 ```bash
-# 停止後端
-pkill -f "uvicorn"
+# 停止後端(通過端口找到並終止)
+lsof -ti:8000 | xargs kill -9
 
-# 停止前端
-pkill -f "http.server"
+# 停止前端(Ctrl+C 在運行 npm run dev 的終端,或)
+lsof -ti:5173 | xargs kill -9
+# 如果端口自動跳轉到 5174
+lsof -ti:5174 | xargs kill -9
 
 # 停止 Docker PostgreSQL
 docker stop token-manager-db
@@ -203,9 +206,18 @@ docker rm token-manager-db
 
 **解決**: 改用 5433 端口 (已在指南中使用)
 
-### 問題 2: `python` 指令不存在
+### 問題 2: 端口已被佔用 (Address already in use)
 
-**解決**: 使用 `python3` 或配置 alias
+**解決**: 
+```bash
+# 找出佔用端口的進程
+lsof -ti:8000  # 後端
+lsof -ti:5173  # 前端(Vite會自動跳到5174如果5173被佔用)
+
+# 終止該進程
+lsof -ti:8000 | xargs kill -9   # 後端
+lsof -ti:5173 | xargs kill -9   # 前端
+```
 
 ### 問題 3: Worker KV 命令錯誤
 

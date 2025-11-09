@@ -402,6 +402,41 @@ Worker 處理:
 
 ---
 
+## ⚠️ 接入前：檢查你的 API 類型（30 秒）
+
+**為什麼要檢查？** 不同類型的 HTTP 請求有不同的處理方式，提前確認可以避免問題。
+
+### 快速測試你的後端 API
+
+```bash
+# 1. 檢查響應狀態碼和 headers
+curl -I https://your-backend.com/endpoint
+
+# 看這裡 ↓
+HTTP/2 200  ← 2xx = 標準請求 ✅ 沒問題
+HTTP/2 302  ← 3xx = Redirect 請求 ✅ 沒問題（我們會處理）
+location: https://...  ← 有這個 = Redirect ✅ 沒問題
+```
+
+### ✅ 確認支援（大多數 API 都沒問題）
+
+你的 API **可以接入**，如果：
+- ✅ 狀態碼是 2xx（200, 201, 204...）
+- ✅ 狀態碼是 3xx（301, 302, 303...）且有 `Location` header
+- ✅ 狀態碼是 4xx/5xx（錯誤也能正確轉發）
+- ✅ Request body < 100MB
+
+### ⚠️ 需要注意（少數情況）
+
+你的 API **可能需要調整**，如果：
+- ⚠️ Request body > 100MB（大檔案上傳）
+- ⚠️ Response 是串流（Server-Sent Events, 視頻串流）
+- ❌ 使用 WebSocket（目前不支援，需要直接連接）
+
+**不確定？** 直接接入試試，90% 的 API 都沒問題！遇到問題再查 `/docs/HTTP_REQUEST_TYPES_SUPPORT.md`
+
+---
+
 ## 📞 需要協助？
 
 ### 找 Core Team 幫忙

@@ -27,7 +27,7 @@ source .env
 
 # 檢查路由配置
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/storage/kv/namespaces/$CF_KV_NAMESPACE_ID/values/routes" \
-  -H "Authorization: Bearer $CF_API_TOKEN" | python3 -m json.tool | grep -A 10 "your-route"
+  -H "Authorization: Bearer $CF_API_TOKEN" | uv run python -m json.tool | grep -A 10 "your-route"
 
 # 應該看到路由的 url, tags, auth 配置
 ```
@@ -217,7 +217,7 @@ curl -X GET https://api-gateway.cryptoxlab.workers.dev/api/cloudconvert/jobs/$JO
   ✅ 包含下載 URL
   
 提取下載連結:
-  | python3 -m json.tool | grep -o 'https://.*\.mp4[^"]*'
+  | uv run python -m json.tool | grep -o 'https://.*\.mp4[^"]*'
 ```
 
 ---
@@ -507,7 +507,7 @@ source .env
 
 # 列出所有 keys
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/storage/kv/namespaces/$CF_KV_NAMESPACE_ID/keys" \
-  -H "Authorization: Bearer $CF_API_TOKEN" | python3 -m json.tool
+  -H "Authorization: Bearer $CF_API_TOKEN" | uv run python -m json.tool
 
 # 查看特定 key
 curl -s "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/storage/kv/namespaces/$CF_KV_NAMESPACE_ID/values/KEY_NAME" \

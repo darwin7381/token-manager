@@ -24,8 +24,8 @@ TOKEN_RESPONSE=$(curl -s -X POST http://localhost:8000/api/tokens \
 
 echo "Response: $TOKEN_RESPONSE"
 
-# 提取 token (使用 python 來解析 JSON)
-TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('token', 'ERROR'))" 2>/dev/null)
+# 提取 token (使用 uv python 來解析 JSON)
+TOKEN=$(echo "$TOKEN_RESPONSE" | uv run python -c "import sys, json; data=json.load(sys.stdin); print(data.get('token', 'ERROR'))" 2>/dev/null)
 
 if [ "$TOKEN" == "ERROR" ] || [ -z "$TOKEN" ]; then
     echo "❌ Token creation failed"
@@ -39,7 +39,7 @@ echo ""
 # 獲取 Token 列表
 echo "3️⃣  Listing Tokens..."
 TOKENS=$(curl -s http://localhost:8000/api/tokens)
-echo "$TOKENS" | python3 -m json.tool 2>/dev/null | head -20
+echo "$TOKENS" | uv run python -m json.tool 2>/dev/null | head -20
 echo "✅ Token list retrieved"
 echo ""
 
@@ -60,14 +60,14 @@ echo ""
 # 獲取路由列表
 echo "5️⃣  Listing Routes..."
 ROUTES=$(curl -s http://localhost:8000/api/routes)
-echo "$ROUTES" | python3 -m json.tool 2>/dev/null
+echo "$ROUTES" | uv run python -m json.tool 2>/dev/null
 echo "✅ Route list retrieved"
 echo ""
 
 # 獲取統計
 echo "6️⃣  Getting Stats..."
 STATS=$(curl -s http://localhost:8000/api/stats)
-echo "$STATS" | python3 -m json.tool 2>/dev/null
+echo "$STATS" | uv run python -m json.tool 2>/dev/null
 echo "✅ Stats retrieved"
 echo ""
 
@@ -76,9 +76,9 @@ echo "🎉 All tests passed!"
 echo ""
 echo "📝 Summary:"
 echo "  - Backend: http://localhost:8000"
-echo "  - Frontend: http://localhost:3001"
+echo "  - Frontend: http://localhost:5173"
 echo "  - API Docs: http://localhost:8000/docs"
 echo "  - Token: $TOKEN"
 echo ""
-echo "🔗 Open frontend: open http://localhost:3001"
+echo "🔗 Open frontend: open http://localhost:5173"
 

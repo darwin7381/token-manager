@@ -29,10 +29,10 @@ if [ -z "$CLERK_TOKEN" ]; then
     echo "請執行以下命令獲取真實數據："
     echo ""
     echo "# 獲取 Token hash"
-    echo 'curl -s http://localhost:8000/api/tokens -H "Authorization: Bearer YOUR_TOKEN" | python3 -m json.tool | grep token_hash'
+    echo 'curl -s http://localhost:8000/api/tokens -H "Authorization: Bearer YOUR_TOKEN" | uv run python -m json.tool | grep token_hash'
     echo ""
     echo "# 獲取路由"
-    echo 'curl -s http://localhost:8000/api/routes -H "Authorization: Bearer YOUR_TOKEN" | python3 -m json.tool | grep path'
+    echo 'curl -s http://localhost:8000/api/routes -H "Authorization: Bearer YOUR_TOKEN" | uv run python -m json.tool | grep path'
     echo ""
     exit 1
 fi
@@ -57,7 +57,7 @@ IFS=',' read -ra TOKEN_HASHES <<< "$TOKEN_HASHES_INPUT"
 echo ""
 echo "🛣️  獲取真實路由列表..."
 ROUTES_JSON=$(curl -s "$BACKEND_URL/api/routes" -H "Authorization: Bearer $CLERK_TOKEN")
-ROUTE_PATHS=($(echo "$ROUTES_JSON" | python3 -c "import sys, json; [print(r['path']) for r in json.load(sys.stdin)]" 2>/dev/null))
+ROUTE_PATHS=($(echo "$ROUTES_JSON" | uv run python -c "import sys, json; [print(r['path']) for r in json.load(sys.stdin)]" 2>/dev/null))
 
 if [ ${#ROUTE_PATHS[@]} -eq 0 ]; then
     echo "❌ 沒有找到路由"
@@ -131,7 +131,7 @@ echo ""
 
 # 驗證
 RESPONSE=$(curl -s "$BACKEND_URL/api/usage/test-data")
-COUNT=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['count'])" 2>/dev/null)
+COUNT=$(echo "$RESPONSE" | uv run python -c "import sys, json; print(json.load(sys.stdin)['count'])" 2>/dev/null)
 
 echo "📊 資料庫中共有 $COUNT 條使用記錄"
 echo ""
