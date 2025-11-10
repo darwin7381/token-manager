@@ -74,13 +74,6 @@ export default function CreateTokenModal({ onClose, onCreated }) {
     }
   };
 
-  const handleCopyAndClose = () => {
-    navigator.clipboard.writeText(newToken);
-    alert('✅ Token 已複製到剪貼簿！');
-    onCreated();
-    onClose();
-  };
-
   return (
     <div className="modal-overlay" onClick={handleClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
@@ -206,29 +199,40 @@ export default function CreateTokenModal({ onClose, onCreated }) {
           </form>
         ) : (
           <div>
-            <div style={{ 
-              backgroundColor: '#fef3c7', 
-              border: '2px solid #f59e0b', 
-              padding: '15px', 
-              borderRadius: '8px',
-              marginBottom: '20px'
-            }}>
-              <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', color: '#92400e' }}>
+            <div 
+              className="token-warning-box"
+              style={{ 
+                backgroundColor: 'var(--bg-secondary)', 
+                border: '2px solid var(--accent-warning)', 
+                padding: '15px', 
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}
+            >
+              <p style={{ 
+                margin: '0 0 10px 0', 
+                fontWeight: 'bold', 
+                color: 'var(--accent-warning)' 
+              }}>
                 ⚠️ 請立即複製此 Token！
               </p>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <div style={{ 
-                  flex: 1,
-                  backgroundColor: '#1f2937', 
-                  color: '#10b981', 
-                  padding: '12px 15px', 
-                  borderRadius: '6px',
-                  fontFamily: 'monospace',
-                  fontSize: '14px',
-                  wordBreak: 'break-all',
-                  userSelect: 'all',
-                  cursor: 'text'
-                }}>
+                <div 
+                  className="token-display-box"
+                  style={{ 
+                    flex: 1,
+                    backgroundColor: 'var(--bg-tertiary)', 
+                    color: 'var(--accent-success)', 
+                    padding: '12px 15px', 
+                    borderRadius: '6px',
+                    fontFamily: 'monospace',
+                    fontSize: '14px',
+                    wordBreak: 'break-all',
+                    userSelect: 'all',
+                    cursor: 'text',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
                   {newToken}
                 </div>
                 <button
@@ -244,19 +248,39 @@ export default function CreateTokenModal({ onClose, onCreated }) {
               </div>
             </div>
 
-            <div style={{ 
-              backgroundColor: '#f0f9ff', 
-              padding: '15px', 
-              borderRadius: '8px',
-              marginBottom: '20px',
-              fontSize: '14px'
-            }}>
-              <strong>💡 使用方式：</strong>
-              <ol style={{ margin: '10px 0 0 0', paddingLeft: '20px' }}>
-                <li>點擊下方「複製 Token 並關閉」按鈕</li>
-                <li>在 n8n 中設定 HTTP Request Header: <code>X-API-Key</code></li>
+            <div 
+              className="token-usage-info"
+              style={{ 
+                backgroundColor: 'var(--bg-tertiary)', 
+                padding: '15px', 
+                borderRadius: '8px',
+                marginBottom: '20px',
+                fontSize: '14px',
+                border: '1px solid var(--border-color)'
+              }}
+            >
+              <strong style={{ color: 'var(--text-primary)' }}>💡 使用方式：</strong>
+              <ol style={{ 
+                margin: '10px 0 0 0', 
+                paddingLeft: '20px',
+                color: 'var(--text-secondary)'
+              }}>
+                <li>點擊上方「複製」按鈕複製 Token</li>
+                <li>在 n8n 中設定 HTTP Request Header: <code style={{ 
+                  backgroundColor: 'var(--bg-primary)',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  color: 'var(--accent-primary)',
+                  fontSize: '13px'
+                }}>X-API-Key</code></li>
                 <li>Header 值貼上剛才複製的 Token</li>
-                <li>調用路由，例如: <code>https://your-worker.workers.dev/api/image/upload</code></li>
+                <li>調用路由，例如: <code style={{ 
+                  backgroundColor: 'var(--bg-primary)',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  color: 'var(--accent-success)',
+                  fontSize: '12px'
+                }}>https://your-worker.workers.dev/api/image/upload</code></li>
               </ol>
             </div>
 

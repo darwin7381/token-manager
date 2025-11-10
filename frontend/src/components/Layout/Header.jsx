@@ -177,66 +177,207 @@ export default function Header() {
             </button>
           )}
           
-          {/* 搜尋結果下拉框 */}
+          {/* 搜尋結果下拉框 - 改進版 */}
           {showSearchResults && (
             <div style={{
               position: 'absolute',
               top: 'calc(100% + 8px)',
-              left: 0,
               right: 0,
-              background: 'white',
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-              maxHeight: '400px',
+              minWidth: '480px',
+              maxWidth: '600px',
+              background: theme === 'dark' 
+                ? 'rgba(31, 41, 55, 0.95)' 
+                : 'rgba(255, 255, 255, 0.95)',
+              border: theme === 'dark' 
+                ? '1px solid rgba(75, 85, 99, 0.8)' 
+                : '1px solid rgba(229, 231, 235, 0.8)',
+              borderRadius: '12px',
+              boxShadow: theme === 'dark'
+                ? '0 10px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.3)'
+                : '0 10px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)',
+              maxHeight: '500px',
               overflowY: 'auto',
-              zIndex: 1000
+              zIndex: 1000,
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)'
             }}>
               {searchLoading ? (
-                <div style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>
-                  搜尋中...
+                <div style={{ 
+                  padding: '32px', 
+                  textAlign: 'center', 
+                  color: theme === 'dark' ? '#9ca3af' : '#6b7280',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '12px'
+                }}>
+                  <div style={{ 
+                    width: '32px', 
+                    height: '32px', 
+                    border: theme === 'dark' 
+                      ? '3px solid rgba(75, 85, 99, 0.5)' 
+                      : '3px solid #e5e7eb',
+                    borderTop: '3px solid #3b82f6',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  <span style={{ fontSize: '14px', fontWeight: '500' }}>搜尋中...</span>
                 </div>
               ) : (searchResults.tokens.length === 0 && searchResults.routes.length === 0) ? (
-                <div style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>
-                  沒有找到匹配的結果
+                <div style={{ 
+                  padding: '32px', 
+                  textAlign: 'center', 
+                  color: theme === 'dark' ? '#6b7280' : '#9ca3af',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <div style={{ fontSize: '32px', opacity: 0.5 }}>🔍</div>
+                  <div style={{ 
+                    fontSize: '14px', 
+                    fontWeight: '500', 
+                    color: theme === 'dark' ? '#9ca3af' : '#6b7280' 
+                  }}>
+                    沒有找到匹配的結果
+                  </div>
+                  <div style={{ 
+                    fontSize: '12px', 
+                    color: theme === 'dark' ? '#6b7280' : '#9ca3af' 
+                  }}>
+                    試試其他關鍵字
+                  </div>
                 </div>
               ) : (
                 <>
                   {/* Token 搜尋結果 */}
                   {searchResults.tokens.length > 0 && (
-                    <div>
+                    <div style={{ marginBottom: searchResults.routes.length > 0 ? '8px' : '0' }}>
                       <div style={{ 
-                        padding: '8px 12px', 
-                        fontSize: '12px', 
+                        padding: '12px 16px', 
+                        fontSize: '13px', 
                         fontWeight: '600', 
-                        color: '#6b7280',
-                        borderBottom: '1px solid #e5e7eb'
+                        color: theme === 'dark' ? '#d1d5db' : '#374151',
+                        background: theme === 'dark'
+                          ? 'linear-gradient(to right, rgba(55, 65, 81, 0.6), rgba(31, 41, 55, 0.6))'
+                          : 'linear-gradient(to right, rgba(249, 250, 251, 0.8), rgba(255, 255, 255, 0.8))',
+                        borderBottom: theme === 'dark' 
+                          ? '1px solid rgba(75, 85, 99, 0.5)' 
+                          : '1px solid rgba(229, 231, 235, 0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 1,
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)'
                       }}>
-                        🔑 Token ({searchResults.tokens.length})
+                        <span style={{ fontSize: '16px' }}>🔑</span>
+                        <span>Token</span>
+                        <span style={{ 
+                          marginLeft: 'auto',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          color: theme === 'dark' ? '#9ca3af' : '#6b7280',
+                          background: theme === 'dark' 
+                            ? 'rgba(55, 65, 81, 0.8)' 
+                            : 'rgba(243, 244, 246, 0.8)',
+                          padding: '2px 8px',
+                          borderRadius: '10px'
+                        }}>
+                          {searchResults.tokens.length}
+                        </span>
                       </div>
-                      {searchResults.tokens.map((token) => (
+                      {searchResults.tokens.map((token, index) => (
                         <div
                           key={token.id}
                           onClick={() => handleSearchResultClick('token', token)}
                           style={{
-                            padding: '12px',
+                            padding: '14px 16px',
                             cursor: 'pointer',
-                            borderBottom: '1px solid #f3f4f6',
-                            transition: 'background-color 0.2s'
+                            borderBottom: index < searchResults.tokens.length - 1 
+                              ? (theme === 'dark' ? '1px solid rgba(75, 85, 99, 0.3)' : '1px solid rgba(243, 244, 246, 0.8)') 
+                              : 'none',
+                            transition: 'all 0.2s ease',
+                            background: 'transparent'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = theme === 'dark' 
+                              ? 'rgba(59, 130, 246, 0.15)' 
+                              : 'rgba(240, 249, 255, 0.8)';
+                            e.currentTarget.style.paddingLeft = '20px';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.paddingLeft = '16px';
+                          }}
                         >
-                          <div style={{ fontWeight: '500', fontSize: '14px', marginBottom: '4px' }}>
-                            {token.name}
+                          <div style={{ 
+                            fontWeight: '600', 
+                            fontSize: '14px', 
+                            marginBottom: '6px',
+                            color: theme === 'dark' ? '#f3f4f6' : '#111827',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}>
+                            <span>{token.name}</span>
+                            {token.status === 'active' && (
+                              <span style={{
+                                fontSize: '10px',
+                                fontWeight: '500',
+                                color: theme === 'dark' ? '#6ee7b7' : '#059669',
+                                background: theme === 'dark' 
+                                  ? 'rgba(110, 231, 183, 0.2)' 
+                                  : 'rgba(209, 250, 229, 0.8)',
+                                padding: '2px 6px',
+                                borderRadius: '4px'
+                              }}>
+                                活躍
+                              </span>
+                            )}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                            {token.description || '無描述'}
-                          </div>
+                          {token.description && (
+                            <div style={{ 
+                              fontSize: '12px', 
+                              color: theme === 'dark' ? '#9ca3af' : '#6b7280',
+                              marginBottom: '6px',
+                              lineHeight: '1.5'
+                            }}>
+                              {token.description}
+                            </div>
+                          )}
                           {token.scopes && token.scopes.length > 0 && (
-                            <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
-                              範圍: {token.scopes.slice(0, 3).join(', ')}
-                              {token.scopes.length > 3 && '...'}
+                            <div style={{ 
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '4px',
+                              marginTop: '6px'
+                            }}>
+                              {token.scopes.slice(0, 4).map((scope, i) => (
+                                <span key={i} style={{
+                                  fontSize: '10px',
+                                  color: theme === 'dark' ? '#d1d5db' : '#4b5563',
+                                  background: theme === 'dark' 
+                                    ? 'rgba(75, 85, 99, 0.5)' 
+                                    : 'rgba(243, 244, 246, 0.8)',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontFamily: 'monospace'
+                                }}>
+                                  {scope}
+                                </span>
+                              ))}
+                              {token.scopes.length > 4 && (
+                                <span style={{
+                                  fontSize: '10px',
+                                  color: theme === 'dark' ? '#6b7280' : '#9ca3af',
+                                  padding: '2px 6px'
+                                }}>
+                                  +{token.scopes.length - 4}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -248,36 +389,129 @@ export default function Header() {
                   {searchResults.routes.length > 0 && (
                     <div>
                       <div style={{ 
-                        padding: '8px 12px', 
-                        fontSize: '12px', 
+                        padding: '12px 16px', 
+                        fontSize: '13px', 
                         fontWeight: '600', 
-                        color: '#6b7280',
-                        borderBottom: '1px solid #e5e7eb'
+                        color: theme === 'dark' ? '#d1d5db' : '#374151',
+                        background: theme === 'dark'
+                          ? 'linear-gradient(to right, rgba(55, 65, 81, 0.6), rgba(31, 41, 55, 0.6))'
+                          : 'linear-gradient(to right, rgba(249, 250, 251, 0.8), rgba(255, 255, 255, 0.8))',
+                        borderBottom: theme === 'dark' 
+                          ? '1px solid rgba(75, 85, 99, 0.5)' 
+                          : '1px solid rgba(229, 231, 235, 0.5)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 1,
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)'
                       }}>
-                        🛣️ 路由 ({searchResults.routes.length})
+                        <span style={{ fontSize: '16px' }}>🛣️</span>
+                        <span>路由</span>
+                        <span style={{ 
+                          marginLeft: 'auto',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          color: theme === 'dark' ? '#9ca3af' : '#6b7280',
+                          background: theme === 'dark' 
+                            ? 'rgba(55, 65, 81, 0.8)' 
+                            : 'rgba(243, 244, 246, 0.8)',
+                          padding: '2px 8px',
+                          borderRadius: '10px'
+                        }}>
+                          {searchResults.routes.length}
+                        </span>
                       </div>
-                      {searchResults.routes.map((route) => (
+                      {searchResults.routes.map((route, index) => (
                         <div
                           key={route.id}
                           onClick={() => handleSearchResultClick('route', route)}
                           style={{
-                            padding: '12px',
+                            padding: '14px 16px',
                             cursor: 'pointer',
-                            borderBottom: '1px solid #f3f4f6',
-                            transition: 'background-color 0.2s'
+                            borderBottom: index < searchResults.routes.length - 1 
+                              ? (theme === 'dark' ? '1px solid rgba(75, 85, 99, 0.3)' : '1px solid rgba(243, 244, 246, 0.8)') 
+                              : 'none',
+                            transition: 'all 0.2s ease',
+                            background: 'transparent'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = theme === 'dark' 
+                              ? 'rgba(251, 191, 36, 0.15)' 
+                              : 'rgba(254, 243, 199, 0.8)';
+                            e.currentTarget.style.paddingLeft = '20px';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                            e.currentTarget.style.paddingLeft = '16px';
+                          }}
                         >
-                          <div style={{ fontWeight: '500', fontSize: '14px', marginBottom: '4px' }}>
-                            {route.name || route.path}
+                          <div style={{ 
+                            fontWeight: '600', 
+                            fontSize: '14px', 
+                            marginBottom: '6px',
+                            color: theme === 'dark' ? '#f3f4f6' : '#111827',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}>
+                            <span>{route.name || route.path}</span>
                           </div>
-                          <div style={{ fontSize: '12px', color: '#6b7280', fontFamily: 'monospace' }}>
+                          <div style={{ 
+                            fontSize: '12px', 
+                            color: theme === 'dark' ? '#6ee7b7' : '#059669',
+                            fontFamily: 'SF Mono, Consolas, Monaco, monospace',
+                            background: theme === 'dark' 
+                              ? 'rgba(16, 185, 129, 0.2)' 
+                              : 'rgba(240, 253, 244, 0.8)',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            display: 'inline-block',
+                            marginBottom: '6px'
+                          }}>
                             {route.path}
                           </div>
                           {route.description && (
-                            <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                            <div style={{ 
+                              fontSize: '12px', 
+                              color: theme === 'dark' ? '#9ca3af' : '#6b7280',
+                              lineHeight: '1.5'
+                            }}>
                               {route.description}
+                            </div>
+                          )}
+                          {route.tags && route.tags.length > 0 && (
+                            <div style={{ 
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: '4px',
+                              marginTop: '6px'
+                            }}>
+                              {route.tags.slice(0, 4).map((tag, i) => (
+                                <span key={i} style={{
+                                  fontSize: '10px',
+                                  color: theme === 'dark' ? '#fbbf24' : '#f59e0b',
+                                  background: theme === 'dark' 
+                                    ? 'rgba(251, 191, 36, 0.2)' 
+                                    : 'rgba(254, 243, 199, 0.8)',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontWeight: '500'
+                                }}>
+                                  #{tag}
+                                </span>
+                              ))}
+                              {route.tags.length > 4 && (
+                                <span style={{
+                                  fontSize: '10px',
+                                  color: theme === 'dark' ? '#6b7280' : '#9ca3af',
+                                  padding: '2px 6px'
+                                }}>
+                                  +{route.tags.length - 4}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>

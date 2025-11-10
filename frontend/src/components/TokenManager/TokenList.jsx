@@ -229,29 +229,40 @@ export default function TokenList({ onUpdate }) {
               </div>
             ) : (
               <>
-                <div style={{ 
-                  backgroundColor: '#fef3c7', 
-                  border: '2px solid #f59e0b', 
-                  padding: '15px', 
-                  borderRadius: '8px',
-                  marginBottom: '20px'
-                }}>
-                  <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', color: '#92400e' }}>
+                <div 
+                  className="token-warning-box"
+                  style={{ 
+                    backgroundColor: 'var(--bg-secondary)', 
+                    border: '2px solid var(--accent-warning)', 
+                    padding: '15px', 
+                    borderRadius: '8px',
+                    marginBottom: '20px'
+                  }}
+                >
+                  <p style={{ 
+                    margin: '0 0 10px 0', 
+                    fontWeight: 'bold', 
+                    color: 'var(--accent-warning)' 
+                  }}>
                     ⚠️ 點擊複製按鈕將 Token 複製到剪貼簿
                   </p>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    <div style={{ 
-                      flex: 1,
-                      backgroundColor: '#1f2937', 
-                      color: '#10b981', 
-                      padding: '12px 15px', 
-                      borderRadius: '6px',
-                      fontFamily: 'monospace',
-                      fontSize: '14px',
-                      wordBreak: 'break-all',
-                      userSelect: 'none',
-                      cursor: 'default'
-                    }}>
+                    <div 
+                      className="token-display-box"
+                      style={{ 
+                        flex: 1,
+                        backgroundColor: 'var(--bg-tertiary)', 
+                        color: 'var(--accent-success)', 
+                        padding: '12px 15px', 
+                        borderRadius: '6px',
+                        fontFamily: 'monospace',
+                        fontSize: '14px',
+                        wordBreak: 'break-all',
+                        userSelect: 'none',
+                        cursor: 'default',
+                        border: '1px solid var(--border-color)'
+                      }}
+                    >
                       {maskToken(revealedToken.token)}
                     </div>
                     <button
@@ -268,17 +279,31 @@ export default function TokenList({ onUpdate }) {
                   </div>
                 </div>
 
-                <div style={{ 
-                  backgroundColor: '#f0f9ff', 
-                  padding: '15px', 
-                  borderRadius: '8px',
-                  marginBottom: '20px',
-                  fontSize: '14px'
-                }}>
-                  <strong>💡 使用方式：</strong>
-                  <ol style={{ margin: '10px 0 0 0', paddingLeft: '20px' }}>
+                <div 
+                  className="token-usage-info"
+                  style={{ 
+                    backgroundColor: 'var(--bg-tertiary)', 
+                    padding: '15px', 
+                    borderRadius: '8px',
+                    marginBottom: '20px',
+                    fontSize: '14px',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <strong style={{ color: 'var(--text-primary)' }}>💡 使用方式：</strong>
+                  <ol style={{ 
+                    margin: '10px 0 0 0', 
+                    paddingLeft: '20px',
+                    color: 'var(--text-secondary)'
+                  }}>
                     <li>點擊上方「複製」按鈕</li>
-                    <li>在 n8n 中設定 HTTP Request Header: <code>X-API-Key</code></li>
+                    <li>在 n8n 中設定 HTTP Request Header: <code style={{ 
+                      backgroundColor: 'var(--bg-primary)',
+                      padding: '2px 6px',
+                      borderRadius: '3px',
+                      color: 'var(--accent-primary)',
+                      fontSize: '13px'
+                    }}>X-API-Key</code></li>
                     <li>Header 值貼上此 Token</li>
                   </ol>
                 </div>
