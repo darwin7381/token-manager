@@ -12,7 +12,9 @@ import AuditLogs from './components/Dashboard/AuditLogs';
 import SystemHealth from './components/Dashboard/SystemHealth';
 import UsageAnalytics from './components/Analytics/UsageAnalytics';
 import TokenUsageDetail from './components/Analytics/TokenUsageDetail';
+import TokenUsageList from './components/Analytics/TokenUsageList';
 import RouteUsageDetail from './components/Analytics/RouteUsageDetail';
+import RouteUsageList from './components/Analytics/RouteUsageList';
 import SignIn from './components/Auth/SignIn';
 import SignUp from './components/Auth/SignUp';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
@@ -41,8 +43,10 @@ function App() {
           <Route path="audit-logs" element={<AuditLogs />} />
           <Route path="system-health" element={<SystemHealth />} />
           <Route path="usage-analytics" element={<UsageAnalytics />} />
+          <Route path="token-usage" element={<TokenUsageList />} />
           <Route path="token-usage/:tokenId" element={<TokenUsageDetail />} />
           <Route path="route-usage" element={<RouteUsageDetail />} />
+          <Route path="route-usage-list" element={<RouteUsageList />} />
           
           {/* 各個功能頁面 */}
           <Route path="stats" element={<Stats />} />

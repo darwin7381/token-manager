@@ -14,7 +14,8 @@ import {
   FileText,
   Users,
   Activity,
-  FileSearch
+  FileSearch,
+  ChevronDown
 } from 'lucide-react';
 import { usePermissions } from '../../hooks/usePermissions';
 
@@ -42,7 +43,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
 
   const menuSections = [
     {
-      title: 'Dashboard',
+      title: 'DASHBOARD',
       items: [
         { 
           id: 'dashboard', 
@@ -54,7 +55,19 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
           id: 'usage-analytics', 
           icon: BarChart3, 
           label: 'API 使用分析',
-          path: '/usage-analytics'
+          path: '/usage-analytics',
+          subItems: [
+            {
+              id: 'token-usage-list',
+              label: 'Token 使用詳情',
+              path: '/token-usage'
+            },
+            {
+              id: 'route-usage-list',
+              label: '路由調用統計',
+              path: '/route-usage-list'
+            }
+          ]
         },
         { 
           id: 'system-health', 
@@ -126,10 +139,25 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
     <div className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* Header */}
       <div className="sidebar-header">
-        <div className="sidebar-logo">🔐</div>
-        <div className="sidebar-brand">
-          <div className="sidebar-title">Token Manager</div>
-          <div className="sidebar-subtitle">API 集中管理系統</div>
+        <div 
+          className="sidebar-logo-container"
+          onClick={() => navigate('/dashboard')}
+          style={{ 
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flex: 1
+          }}
+          title="返回首頁"
+        >
+          <div className="sidebar-logo">🔐</div>
+          {!collapsed && (
+            <div className="sidebar-brand">
+              <div className="sidebar-title">Token Manager</div>
+              <div className="sidebar-subtitle">API 集中管理系統</div>
+            </div>
+          )}
         </div>
         <button 
           className="sidebar-toggle" 
@@ -147,7 +175,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
             {!collapsed && <div className="menu-section-title">{section.title}</div>}
             {section.items.map((item) => {
               const Icon = item.icon;
-              const isActive = activeTab === item.id;
+              const isActive = activeTab === item.id || location.pathname === item.path;
               const hasSubItems = item.subItems && item.subItems.length > 0;
               const isExpanded = expandedSections[item.id];
 
@@ -159,6 +187,10 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
                     onClick={() => {
                       if (hasSubItems) {
                         toggleSection(item.id);
+                        // 如果有路徑，也導航到該頁面
+                        if (item.path) {
+                          navigate(item.path);
+                        }
                       } else if (item.path) {
                         navigate(item.path);
                       } else if (item.onClick) {
@@ -176,7 +208,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
                     )}
                     {hasSubItems && !collapsed && (
                       <span className={`menu-arrow ${isExpanded ? 'expanded' : ''}`}>
-                        ›
+                        <ChevronDown size={16} />
                       </span>
                     )}
                   </div>
@@ -186,12 +218,16 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
                     <div className="submenu">
                       {item.subItems.map((subItem) => {
                         const SubIcon = subItem.icon;
+                        const isSubActive = location.pathname === subItem.path;
                         return (
                           <div
                             key={subItem.id}
-                            className="submenu-item"
-                            onClick={() => {
-                              if (subItem.external) {
+                            className={`submenu-item ${isSubActive ? 'active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (subItem.path) {
+                                navigate(subItem.path);
+                              } else if (subItem.external) {
                                 window.open(subItem.external, '_blank');
                               } else if (subItem.onClick) {
                                 subItem.onClick();

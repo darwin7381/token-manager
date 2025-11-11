@@ -247,30 +247,35 @@ body {
 .menu-arrow {
   margin-left: auto;
   color: rgba(255, 255, 255, 0.5);
-  transition: transform 0.3s;
-  font-size: 20px;
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .menu-arrow.expanded {
-  transform: rotate(90deg);
+  transform: rotate(180deg);
 }
 
 /* 子菜單 */
 .submenu {
   background: rgba(0, 0, 0, 0.2);
-  margin: 4px 0;
+  margin: 4px 0 8px 0;
   border-radius: 8px;
   padding: 4px 0;
-  animation: slideDown 0.3s;
+  overflow: hidden;
+  animation: slideDown 0.3s ease-out;
 }
 
 @keyframes slideDown {
   from {
     opacity: 0;
+    max-height: 0;
     transform: translateY(-10px);
   }
   to {
     opacity: 1;
+    max-height: 500px;
     transform: translateY(0);
   }
 }
@@ -284,12 +289,43 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   font-size: 13px;
+  position: relative;
+  border-radius: 6px;
+  margin: 2px 8px;
+}
+
+.submenu-item::before {
+  content: '';
+  position: absolute;
+  left: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
 }
 
 .submenu-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.9);
-  padding-left: 56px;
+  padding-left: 54px;
+}
+
+.submenu-item:hover::before {
+  background: rgba(59, 130, 246, 0.8);
+  transform: translateY(-50%) scale(1.2);
+}
+
+.submenu-item.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: white;
+}
+
+.submenu-item.active::before {
+  background: var(--sidebar-active);
+  transform: translateY(-50%) scale(1.3);
 }
 
 .sidebar-footer {
